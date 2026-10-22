@@ -103,7 +103,7 @@ def test_ingest_filters_and_writes(tmp_path, fake_rows):
     assert set(df.master_category) <= {"Apparel", "Footwear", "Accessories"}
     for item_id in df.id:
         with Image.open(thumb_path(item_id, data_dir=tmp_path)) as im:
-            assert im.size == (288, 384)
+            assert im.size == (216, 288)
 
 
 def test_ingest_skips_corrupt_image(tmp_path, fake_rows):
@@ -182,7 +182,7 @@ def test_ingest_thumbnails_are_jpeg_at_thumb_size_for_any_aspect_ratio(
     ingest_clothes(tmp_path / "clothes", rows=fake_rows)
     for n in (1, 2, 3):  # row 2 is a 200x100 landscape source
         with Image.open(tmp_path / "clothes" / "thumbs" / f"{n}.jpg") as im:
-            assert im.format == "JPEG" and im.size == (288, 384)
+            assert im.format == "JPEG" and im.size == (216, 288)
     leftovers = [p.name for p in (tmp_path / "clothes" / "thumbs").iterdir()]
     assert sorted(leftovers) == ["1.jpg", "2.jpg", "3.jpg"]  # no temp files
 
@@ -296,4 +296,4 @@ def test_real_stream_first_rows(tmp_path):
     assert df.master_category.isin(["Apparel", "Footwear", "Accessories"]).all()
     for item_id in df.id:
         with Image.open(thumb_path(item_id, data_dir=tmp_path)) as im:
-            assert im.size == (288, 384)
+            assert im.size == (216, 288)

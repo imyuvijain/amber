@@ -10,7 +10,7 @@ from amber import config
 def test_constants():
     assert config.SEED == 7 and config.PCA_DIM == 32 and config.NEAR_DUP_COS == 0.95
     assert config.KEEP_MASTER_CATEGORIES == ("Apparel", "Footwear", "Accessories")
-    assert config.THUMB_SIZE == (288, 384)
+    assert config.THUMB_SIZE == (216, 288)
     assert config.DEFAULT_SETTINGS == config.Settings(30, 40, 20, 10, 7)
 
 
