@@ -698,7 +698,7 @@ git commit -m "feat: active pair selection + simulated-person benchmark"
   - a `chosen_id` that's not in the pair raises `ValueError`
   - a showdown pair without predictions raises `MissingPredictions`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_answer_is_idempotent(conn):
@@ -722,19 +722,19 @@ def test_yous_roundtrip(conn):
     assert load_yous(conn, u)["values"][0] is None
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/store -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `db.py`** with the tables `users`, `answers(user_id, kind, key, value, PRIMARY KEY(user_id, kind, key))`, `pairs`, `predictions`, `yous`, and timestamps in UTC ISO format.
+- [x] **Step 3: Implement `db.py`** with the tables `users`, `answers(user_id, kind, key, value, PRIMARY KEY(user_id, kind, key))`, `pairs`, `predictions`, `yous`, and timestamps in UTC ISO format.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/store -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber/store tests/store
