@@ -4,6 +4,8 @@
 
 * image vector: dims 0-2 are the image's mean R, G, B / 255; the remaining dims are
   deterministic noise x 0.1; then L2-normalised. A red photo therefore points along dim 0.
+  The noise is seeded from the domain-relative path (`clothes/thumbs/7.jpg`), not the
+  absolute one, so vectors do not change with where the data dir lives (e.g. tmp_path).
 * text vector: deterministic noise x 0.1 on every dim; if the lowercased text contains
   "red" / "green" / "blue", dim 0 / 1 / 2 is set to 1; then L2-normalised.
 
@@ -60,7 +62,7 @@ class FakeEncoder:
                 pixels = np.asarray(im.convert("RGB"), dtype=np.float32)
             vec = np.empty(self.dim, dtype=np.float64)
             vec[:3] = pixels.reshape(-1, 3).mean(axis=0) / 255.0
-            vec[3:] = _noise(str(path), self.dim - 3)
+            vec[3:] = _noise("/".join(Path(path).parts[-3:]), self.dim - 3)
             out[i] = _unit(vec)
         return out
 
