@@ -613,7 +613,7 @@ git commit -m "feat: online Bayesian probit preference model"
   - `PRIOR_VAR` is added to `config.py` (starting at `1.0`, tuned in Step 5). It becomes the default `prior_var` of `PreferenceModel`.
   - CLI `amber bench-active` runs on the real clothes basis and prints a table for `strategy × temperature ∈ {0.05, 0.2} × prior_var ∈ {0.1, 1, 10}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_choose_pair_distinct_and_not_excluded():
@@ -638,24 +638,24 @@ def test_random_clicker_is_near_chance():
 
 `X` here is 500 synthetic 32-dimensional points with cluster structure, generated with seed 7.
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/prefs -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `active.py` and `simulate.py`, and add `PRIOR_VAR = 1.0` to `config.py`.**
+- [x] **Step 3: Implement `active.py` and `simulate.py`, and add `PRIOR_VAR = 1.0` to `config.py`.**
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/prefs -q`
 Expected: PASS. If `act >= 0.70` fails, the culprit is usually `prior_var` scale versus the size of the projected vectors. Tune `prior_var`; don't loosen the assertion.
 
-- [ ] **Step 5: Run the real benchmark and record it**
+- [x] **Step 5: Run the real benchmark and record it**
 
 Run: `uv run amber bench-active`
 Record the table in `docs/results/bench.md`, and set `config.PRIOR_VAR` to the best `prior_var`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/amber/prefs src/amber/cli.py src/amber/config.py tests/prefs docs/results/bench.md
