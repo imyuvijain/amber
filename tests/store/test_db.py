@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
+
 from amber.store.db import (
     AlreadyAnswered,
     Choice,
