@@ -542,7 +542,7 @@ git commit -m "feat: pick embedding model by label retrieval; embed clothes and 
 - `p_prefer(a, b) = Φ(μᵀx / √(1 + xᵀΣx))` with `x = a − b`.
 - Add `scipy` to dependencies.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_prior_is_indifferent():
@@ -570,19 +570,19 @@ def test_no_nan_after_many_random_updates():
     assert np.all(np.linalg.eigvalsh(m.cov) > -1e-8)
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/prefs/test_model.py -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `PreferenceModel`** per the algorithm above.
+- [x] **Step 3: Implement `PreferenceModel`** per the algorithm above.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/prefs/test_model.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber/prefs tests/prefs pyproject.toml uv.lock
