@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from amber.config import REPO_ROOT
 from amber.context import DOMAINS, AppContext
 from amber.data.catalog import thumb_path
-from amber.eval.metrics import score_showdown
+from amber.eval.metrics import learning_curve, score_showdown
 from amber.flow import CatalogExhausted, next_pair, progress
 from amber.store.db import (
     AlreadyAnswered,
@@ -140,9 +140,9 @@ def create_app(ctx: AppContext) -> FastAPI:
         with lock:
             require_user(uid)
             if body.phase == "showdown" and body.domain == "clothes":
-                train = progress(ctx.conn, uid, "clothes", "train", ctx)
-                if train["done"] < train["total"]:
-                    raise HTTPException(409, "finish training first")
+                art = progress(ctx.conn, uid, "art", "train", ctx)
+                if art["done"] < art["total"]:
+                    raise HTTPException(409, "finish the art picks first")
             try:
                 pair = next_pair(ctx.conn, uid, body.domain, body.phase, ctx)
             except CatalogExhausted as exc:
@@ -197,9 +197,19 @@ def create_app(ctx: AppContext) -> FastAPI:
             predictions = {
                 c.pair_id: get_predictions(ctx.conn, c.pair_id) for c in choices
             }
+            total = ctx.settings.clothes_pairs
+            late = (total // 2 + 1, total)  # e.g. picks 21-40 of 40
+            all_scores = score_showdown(choices, predictions)
             return {
-                "scores": [asdict(s) for s in score_showdown(choices, predictions)],
-                "n_showdown": len(choices),
+                "scores_all": [asdict(s) for s in all_scores],
+                "scores_late": [
+                    asdict(s) for s in score_showdown(choices, predictions, window=late)
+                ],
+                "curves": {
+                    s.you: learning_curve(choices, predictions, s.you)
+                    for s in all_scores
+                },
+                "n_clothes": len(choices),
             }
 
     @app.get("/thumbs/{domain}/{name}")

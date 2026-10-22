@@ -19,10 +19,18 @@ def _new_user(client, **filters) -> str:
     return uid
 
 
-def _next(client, uid, domain="clothes", phase="train"):
+def _next(client, uid, domain="clothes", phase=None):
+    phase = phase or ("train" if domain == "art" else "showdown")
     return client.post(
         f"/api/users/{uid}/next", json={"domain": domain, "phase": phase}
     )
+
+
+def _ready(client, **filters) -> str:
+    """A new user who has finished the art picks, so clothes can start."""
+    uid = _new_user(client, **filters)
+    _play(client, uid, "train", domain="art")
+    return uid
 
 
 def _play(client, uid, phase, choose="a", domain="clothes") -> list[dict]:
@@ -40,25 +48,18 @@ def _play(client, uid, phase, choose="a", domain="clothes") -> list[dict]:
 # --- the whole flow --------------------------------------------------------------
 
 
-def test_full_flow_api(client):
+def test_full_flow_api(client, ctx):
     uid = client.post("/api/users", json={"name": "y"}).json()["user_id"]
     client.put(f"/api/users/{uid}/filters", json=MEN_APPAREL)
     client.put(f"/api/users/{uid}/describe", json={"text": "I like red."})
-    for phase in ("train", "showdown"):
-        while not (
-            r := client.post(
-                f"/api/users/{uid}/next", json={"domain": "clothes", "phase": phase}
-            ).json()
-        ).get("done"):
-            client.post(
-                f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r["a"]["id"]}
-            )
+    assert len(_play(client, uid, "train", domain="art")) == 6
+    assert len(_play(client, uid, "showdown")) == 6
     res = client.get(f"/api/users/{uid}/results").json()
-    assert res["n_showdown"] == 3
-    assert {s["you"] for s in res["scores"]} >= {"stated", "revealed"}
-    for s in res["scores"]:
+    assert res["n_clothes"] == 6
+    assert {s["you"] for s in res["scores_all"]} >= {"stated", "art", "revealed"}
+    for s in res["scores_all"]:
         assert set(s) == {"you", "correct", "n", "accuracy", "ci_low", "ci_high"}
-        assert s["n"] == 3 and s["ci_low"] <= s["accuracy"] <= s["ci_high"]
+        assert s["n"] == 6 and s["ci_low"] <= s["accuracy"] <= s["ci_high"]
 
 
 def test_create_user(client, ctx):
@@ -70,7 +71,7 @@ def test_create_user(client, ctx):
 
 
 def test_next_shape_and_progress(client):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     r = _next(client, uid).json()
     assert set(r) == {"pair_id", "a", "b", "progress"}
     assert r["progress"] == {"done": 0, "total": 6}
@@ -80,11 +81,12 @@ def test_next_shape_and_progress(client):
     done = client.post(
         f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r["a"]["id"]}
     ).json()
-    assert done == {"progress": {"done": 1, "total": 6}, "reveal": None}
+    assert done["progress"] == {"done": 1, "total": 6}
+    assert set(done["reveal"]) <= {"stated", "bigfive", "art", "revealed"}
 
 
 def test_item_labels_are_non_empty_catalog_columns_as_strings(client, ctx):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     item = _next(client, uid).json()["a"]
     n = item["id"].split(":")[1]
     assert item["thumb_url"] == f"/thumbs/clothes/{n}.jpg"
@@ -114,14 +116,14 @@ def test_art_items_have_art_labels(client):
 
 
 def test_next_resumes_the_open_pair(client):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     first = _next(client, uid).json()
     assert _next(client, uid).json()["pair_id"] == first["pair_id"]
 
 
-def test_train_ends_with_done(client):
-    uid = _new_user(client, **MEN_APPAREL)
-    assert len(_play(client, uid, "train")) == 6
+def test_clothes_phase_ends_with_done(client):
+    uid = _ready(client, **MEN_APPAREL)
+    assert len(_play(client, uid, "showdown")) == 6
     assert _next(client, uid).json() == {
         "done": True,
         "progress": {"done": 6, "total": 6},
@@ -132,9 +134,9 @@ def test_train_ends_with_done(client):
 
 
 def test_pairs_respect_filters(client, ctx):
-    uid = _new_user(client, **MEN_APPAREL)
-    served = _play(client, uid, "train") + _play(client, uid, "showdown")
-    assert len(served) == 9
+    uid = _ready(client, **MEN_APPAREL)
+    served = _play(client, uid, "showdown")
+    assert len(served) == 6
     for pair in served:
         for item in (pair["a"], pair["b"]):
             assert item["labels"]["gender"] == "Men"
@@ -168,10 +170,9 @@ def test_filters_allowing_nothing_are_rejected_and_not_saved(client, ctx):
 
 
 def test_every_served_item_has_thumbnail(client):
-    uid = _new_user(client, **MEN_APPAREL)
-    served = _play(client, uid, "train") + _play(client, uid, "showdown")
-    art_uid = _new_user(client)
-    served += _play(client, art_uid, "train", domain="art")
+    uid = _ready(client, **MEN_APPAREL)
+    served = _play(client, uid, "showdown")
+    served += _play(client, _new_user(client), "train", domain="art")
     assert served
     for pair in served:
         for item in (pair["a"], pair["b"]):
@@ -201,7 +202,7 @@ def test_thumbs_404_for_anything_else(client, path):
 
 
 def test_double_submit_is_safe(client):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     r = _next(client, uid).json()
     a, b = r["a"]["id"], r["b"]["id"]
     url = f"/api/pairs/{r['pair_id']}/choose"
@@ -213,7 +214,7 @@ def test_double_submit_is_safe(client):
 
 
 def test_choose_errors(client):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     r = _next(client, uid).json()
     url = f"/api/pairs/{r['pair_id']}/choose"
     assert client.post(url, json={"chosen_id": "c:99999"}).status_code == 422
@@ -229,10 +230,11 @@ def test_choose_errors(client):
 def test_reveal_marks_which_yous_sided_with_the_pick(client, ctx):
     uid = _new_user(client, **MEN_APPAREL)
     client.put(f"/api/users/{uid}/describe", json={"text": "I like red."})
-    _play(client, uid, "train")
+    _play(client, uid, "train", domain="art")
     for chosen in ("a", "b"):
-        r = _next(client, uid, phase="showdown").json()
+        r = _next(client, uid).json()
         preds = get_predictions(ctx.conn, r["pair_id"])
+        assert "revealed" in preds
         resp = client.post(
             f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r[chosen]["id"]}
         ).json()
@@ -241,17 +243,17 @@ def test_reveal_marks_which_yous_sided_with_the_pick(client, ctx):
         }
         assert resp["reveal"] == expected
         assert all(isinstance(v, bool) for v in resp["reveal"].values())
-        assert resp["progress"]["total"] == 3
+        assert resp["progress"]["total"] == 6
 
 
 def test_reveal_omits_abstaining_yous(client):
-    uid = _new_user(client, **MEN_APPAREL)  # no description: "stated" abstains
-    _play(client, uid, "train")
-    r = _next(client, uid, phase="showdown").json()
+    uid = _ready(client, **MEN_APPAREL)  # no description: "stated" abstains
+    r = _next(client, uid).json()
     reveal = client.post(
         f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r["a"]["id"]}
     ).json()["reveal"]
     assert "stated" not in reveal
+    assert "revealed" not in reveal  # first five picks: revealed abstains
 
 
 def test_reveal_is_null_outside_the_showdown(client):
@@ -264,14 +266,6 @@ def test_reveal_is_null_outside_the_showdown(client):
 
 
 # --- phases and errors -----------------------------------------------------------
-
-
-def test_showdown_waits_for_training(client):
-    uid = _new_user(client, **MEN_APPAREL)
-    r = _next(client, uid, phase="showdown")
-    assert r.status_code == 409 and "finish training first" in r.json()["detail"]
-    _play(client, uid, "train")
-    assert _next(client, uid, phase="showdown").status_code == 200
 
 
 def test_bad_domain_phase_or_combination_is_422(client):
@@ -288,8 +282,8 @@ def test_retest_is_not_available_yet(client):
 
 
 def test_catalog_exhausted_is_409(client, ctx):
-    ctx.settings = replace(ctx.settings, clothes_train_pairs=40)
-    uid = _new_user(client, **MEN_APPAREL)
+    ctx.settings = replace(ctx.settings, clothes_pairs=40)
+    uid = _ready(client, **MEN_APPAREL)
     for _ in range(40):
         r = _next(client, uid)
         if r.status_code == 409:
@@ -326,11 +320,13 @@ def test_describe_is_saved(client, ctx):
     assert get_answers(ctx.conn, uid, "describe") == {"text": "I like red."}
 
 
-def test_results_before_any_showdown(client):
+def test_results_before_any_clothes_pick(client):
     uid = _new_user(client)
     assert client.get(f"/api/users/{uid}/results").json() == {
-        "scores": [],
-        "n_showdown": 0,
+        "scores_all": [],
+        "scores_late": [],
+        "curves": {},
+        "n_clothes": 0,
     }
 
 
@@ -341,7 +337,7 @@ def test_requests_in_parallel_share_the_connection_safely(client):
     def one(i):
         uid = client.post("/api/users", json={"name": f"u{i}"}).json()["user_id"]
         client.put(f"/api/users/{uid}/filters", json=MEN_APPAREL)
-        r = _next(client, uid)
+        r = _next(client, uid, "art", "train")
         return r.status_code, uid
 
     with ThreadPoolExecutor(8) as pool:
@@ -381,26 +377,21 @@ def test_no_web_dist_means_no_root_page(ctx, tmp_path, monkeypatch):
 # --- one scored clothing phase ----------------------------------------------------
 
 
-def _finish_art(client, uid):
-    _play(client, uid, "train", domain="art")
-
-
 def test_clothes_showdown_waits_for_the_art_phase(client):
     uid = _new_user(client, **MEN_APPAREL)
-    r = _next(client, uid, phase="showdown")
+    r = _next(client, uid)
     assert r.status_code == 409 and "art" in r.json()["detail"]
-    _finish_art(client, uid)
-    assert _next(client, uid, phase="showdown").status_code == 200
+    _play(client, uid, "train", domain="art")
+    assert _next(client, uid).status_code == 200
 
 
 def test_clothes_train_is_a_422(client):
-    uid = _new_user(client, **MEN_APPAREL)
+    uid = _ready(client, **MEN_APPAREL)
     assert _next(client, uid, phase="train").status_code == 422
 
 
 def test_results_route_shape(client, ctx):
-    uid = _new_user(client, **MEN_APPAREL)
-    _finish_art(client, uid)
+    uid = _ready(client, **MEN_APPAREL)
     n = ctx.settings.clothes_pairs
     assert len(_play(client, uid, "showdown")) == n
     res = client.get(f"/api/users/{uid}/results").json()
