@@ -158,7 +158,7 @@ def ingest_clothes(
             }
         )
         if len(records) % PROGRESS_EVERY == 0:
-            logger.info("clothes: %d items collected", len(records))
+            logger.info("%d items collected", len(records))
         if limit is not None and len(records) >= limit:
             break
 
@@ -167,7 +167,5 @@ def ingest_clothes(
     tmp = parquet.with_name(f"{parquet.name}.tmp")
     items.to_parquet(tmp, index=False)
     os.replace(tmp, parquet)
-    logger.info(
-        "clothes: %d items in catalog (%d skipped this run)", len(items), skipped
-    )
+    logger.info("%d items in catalog (%d skipped this run)", len(items), skipped)
     return items
