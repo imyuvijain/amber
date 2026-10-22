@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pytest
 
+from amber.store import db
 from amber.store.db import (
     AlreadyAnswered,
     Choice,
@@ -259,3 +260,70 @@ def test_save_you_upserts_and_casts_to_float32(conn):
     w, meta = load_yous(conn, u)["revealed"]
     assert w.dtype == np.float32 and w.tolist() == [0.0, 1.0, 2.0] and meta == {"n": 2}
     assert len(load_yous(conn, u)) == 1 and load_yous(conn, v) == {}
+
+
+def test_predictions_rejected_after_answer_and_left_unchanged(conn):
+    u = create_user(conn, "y")
+    p = create_pair(conn, u, "clothes", "showdown", "c:1", "c:2")
+    save_predictions(conn, p.pair_id, {"stated": 0.6, "revealed": 0.25})
+    answer_pair(conn, p.pair_id, "c:1")
+    with pytest.raises(AlreadyAnswered):
+        save_predictions(conn, p.pair_id, {"stated": 0.99, "art": 0.1})
+    assert get_predictions(conn, p.pair_id) == {"stated": 0.6, "revealed": 0.25}
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), -0.1, 1.1])
+def test_predictions_must_be_finite_probabilities(conn, bad):
+    u = create_user(conn, "y")
+    p = create_pair(conn, u, "clothes", "showdown", "c:1", "c:2")
+    with pytest.raises(ValueError):
+        save_predictions(conn, p.pair_id, {"stated": 0.5, "revealed": bad})
+    assert get_predictions(conn, p.pair_id) == {}
+
+
+def test_predictions_boundaries_allowed(conn):
+    u = create_user(conn, "y")
+    p = create_pair(conn, u, "clothes", "showdown", "c:1", "c:2")
+    save_predictions(conn, p.pair_id, {"a": 0.0, "b": 1.0})
+    assert get_predictions(conn, p.pair_id) == {"a": 0.0, "b": 1.0}
+
+
+def test_answer_pair_lost_race_same_id_returns_pair_other_id_raises(conn, monkeypatch):
+    """Simulate another writer answering between our read and our guarded UPDATE."""
+    u = create_user(conn, "y")
+    p = create_pair(conn, u, "clothes", "train", "c:1", "c:2")
+    real_get = db._get_pair
+    calls = {"n": 0}
+
+    def stale_get(c, pair_id):
+        calls["n"] += 1
+        if calls["n"] == 1:  # first read sees it unanswered, then the rival writes
+            pair = real_get(c, pair_id)
+            c.execute(
+                "UPDATE pairs SET chosen_id = 'c:1', answered_at = ? WHERE pair_id = ?",
+                (db._iso(T0), pair_id),
+            )
+            return pair
+        return real_get(c, pair_id)
+
+    monkeypatch.setattr(db, "_get_pair", stale_get)
+    got = answer_pair(conn, p.pair_id, "c:1")
+    assert got.chosen_id == "c:1" and got.answered_at == T0
+
+    p2 = create_pair(conn, u, "clothes", "train", "c:3", "c:4")
+    calls["n"] = 0
+
+    def stale_get2(c, pair_id):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            pair = real_get(c, pair_id)
+            c.execute(
+                "UPDATE pairs SET chosen_id = 'c:3', answered_at = ? WHERE pair_id = ?",
+                (db._iso(T0), pair_id),
+            )
+            return pair
+        return real_get(c, pair_id)
+
+    monkeypatch.setattr(db, "_get_pair", stale_get2)
+    with pytest.raises(AlreadyAnswered):
+        answer_pair(conn, p2.pair_id, "c:4")
