@@ -9,7 +9,6 @@ still collected, so thumbnails written by an interrupted run never lose their ro
 import io
 import logging
 import math
-import os
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -17,11 +16,11 @@ import pandas as pd
 from PIL import Image, ImageOps
 
 from amber import config
+from amber.data.store import clean_text, save_thumbnail, write_catalog
 
 logger = logging.getLogger(__name__)
 
 CLOTHES_DATASET = "benitomartin/fashion-product-images-small-384x512"
-THUMB_QUALITY = 85
 PROGRESS_EVERY = 2000
 
 # items.parquet column -> Hugging Face field (string columns; missing becomes "")
@@ -50,12 +49,6 @@ def _stream_rows() -> Iterable[dict]:
     return stream.cast_column("image", datasets.Image(decode=False))
 
 
-def _text(value: object) -> str:
-    if value is None or (isinstance(value, float) and math.isnan(value)):
-        return ""
-    return str(value).strip()
-
-
 def _year(value: object) -> int | None:
     """The source year may be an int, a float, a NaN or missing; null when unusable."""
     try:
@@ -82,41 +75,10 @@ def _thumbnail(image: object) -> Image.Image:
     return ImageOps.fit(rgb, config.THUMB_SIZE, Image.Resampling.LANCZOS)
 
 
-def _save_thumbnail(thumb: Image.Image, dest: Path) -> None:
-    """Write via a temp file so a killed run never leaves a half-written thumbnail,
-    which the resume check would otherwise treat as done."""
-    tmp = dest.with_name(f".{dest.name}.tmp")
-    thumb.save(tmp, format="JPEG", quality=THUMB_QUALITY)
-    os.replace(tmp, dest)
-
-
 def _frame(records: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(records, columns=COLUMNS)
     dtypes = {column: "str" for column in COLUMNS if column != "year"}
     return df.astype({**dtypes, "year": "Int64"})  # year: nullable, may be missing
-
-
-def _merge(
-    existing: pd.DataFrame | None, new: pd.DataFrame, thumbs: Path
-) -> pd.DataFrame:
-    """Existing + new rows, one per id (new wins), only those that have a thumbnail,
-    ordered by numeric id so the table does not depend on stream order."""
-    merged = new if existing is None else pd.concat([existing, new], ignore_index=True)
-    merged = merged.drop_duplicates("id", keep="last")
-    has_thumb = merged["id"].map(lambda i: (thumbs / f"{i[2:]}.jpg").exists())
-    merged = merged.loc[has_thumb.astype(bool)]  # astype: an empty map() is not a mask
-    order = merged["id"].str.slice(2).astype("int64").sort_values(kind="stable").index
-    return merged.loc[order].reset_index(drop=True)
-
-
-def _write_catalog(parquet: Path, thumbs: Path, records: list[dict]) -> pd.DataFrame:
-    """Merge `records` into the existing parquet (if any) and write it atomically."""
-    existing = pd.read_parquet(parquet) if parquet.exists() else None
-    items = _merge(existing, _frame(records), thumbs)
-    tmp = parquet.with_name(f"{parquet.name}.tmp")
-    items.to_parquet(tmp, index=False)
-    os.replace(tmp, parquet)
-    return items
 
 
 def ingest_clothes(
@@ -146,7 +108,10 @@ def ingest_clothes(
     skipped = 0
     try:
         for row in rows:
-            if _text(row.get("masterCategory")) not in config.KEEP_MASTER_CATEGORIES:
+            if (
+                clean_text(row.get("masterCategory"))
+                not in config.KEEP_MASTER_CATEGORIES
+            ):
                 continue
             try:
                 n = int(row["id"])
@@ -162,12 +127,12 @@ def ingest_clothes(
                     logger.warning("skipping c:%d, image not decodable: %s", n, exc)
                     skipped += 1
                     continue
-                _save_thumbnail(thumb, dest)
+                save_thumbnail(thumb, dest)
             records.append(
                 {
                     "id": f"c:{n}",
                     **{
-                        col: _text(row.get(field))
+                        col: clean_text(row.get(field))
                         for col, field in _TEXT_FIELDS.items()
                     },
                     "year": _year(row.get("year")),
@@ -181,10 +146,10 @@ def ingest_clothes(
         # network error, full disk, Ctrl-C: keep the metadata of the thumbnails written
         # so far (the next run would rebuild it anyway, but only after re-streaming)
         if records:
-            items = _write_catalog(parquet, thumbs, records)
+            items = write_catalog(parquet, thumbs, _frame(records))
             logger.warning("interrupted; saved %d items to the catalog", len(items))
         raise
 
-    items = _write_catalog(parquet, thumbs, records)
+    items = write_catalog(parquet, thumbs, _frame(records))
     logger.info("%d items in catalog (%d skipped this run)", len(items), skipped)
     return items
