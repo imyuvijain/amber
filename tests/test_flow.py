@@ -68,6 +68,20 @@ def test_art_pairs_are_art_and_do_not_repeat(ctx, user):
     assert shown_ids(ctx.conn, user, "clothes") == set()
 
 
+def test_art_pairs_ignore_clothes_filters(ctx, user):
+    _filters(ctx, user, genders=["Men"], sections=[])  # nothing allowed in clothes
+    chosen = play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
+    assert len(chosen) == ctx.settings.art_train_pairs
+    assert all(c.domain == "art" and c.phase == "train" for c in chosen)
+
+
+def test_art_active_pairs_follow_the_art_basis(ctx, user):
+    # after a few red picks the active chooser should stay on art ids and keep going
+    play_art(ctx, user, prefer="red", n=3)
+    pair = next_pair(ctx.conn, user, "art", "train", ctx)
+    assert pair.a_id.startswith("a:") and pair.b_id.startswith("a:")
+
+
 def test_train_pairs_reproducible_per_user(ctx, user):
     first = next_pair(ctx.conn, user, "clothes", "train", ctx)
     # same user/domain/phase/n_done on a fresh pair: forget it and ask again
