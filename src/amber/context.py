@@ -3,7 +3,6 @@
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -27,7 +26,6 @@ class AppContext:
     basis: dict[str, Basis]
     basis2d: dict[str, Basis]
     settings: Settings
-    llm: Any | None  # wired in by the values task; None means "no LLM available"
     data_dir: Path
 
 
@@ -60,6 +58,5 @@ def load_context(
         basis=basis,
         basis2d=basis2d,
         settings=settings,
-        llm=None,
         data_dir=data_dir,
     )

@@ -247,11 +247,11 @@ def test_foreign_keys_enforced(conn):
 def test_yous_roundtrip(conn):
     u = create_user(conn, "y")
     save_you(conn, u, "revealed", np.ones(4, np.float32) / 2, {"n": 40})
-    save_you(conn, u, "values", None, {"reason": "no key"})
+    save_you(conn, u, "bigfive", None, {"reason": "no key"})
     w, meta = load_yous(conn, u)["revealed"]
     assert np.allclose(w, 0.5) and meta == {"n": 40} and w.dtype == np.float32
-    assert load_yous(conn, u)["values"][0] is None
-    assert load_yous(conn, u)["values"][1] == {"reason": "no key"}
+    assert load_yous(conn, u)["bigfive"][0] is None
+    assert load_yous(conn, u)["bigfive"][1] == {"reason": "no key"}
 
 
 def test_save_you_upserts_and_casts_to_float32(conn):
@@ -332,8 +332,8 @@ def test_answer_pair_lost_race_same_id_returns_pair_other_id_raises(conn, monkey
 
 def test_save_yous_is_all_or_nothing(conn):
     u = create_user(conn, "y")
-    save_yous(conn, u, {"stated": (np.ones(3), {"a": 1}), "values": (None, {})})
-    assert set(load_yous(conn, u)) == {"stated", "values"}
+    save_yous(conn, u, {"stated": (np.ones(3), {"a": 1}), "bigfive": (None, {})})
+    assert set(load_yous(conn, u)) == {"stated", "bigfive"}
     v = create_user(conn, "z")
     with pytest.raises(TypeError):
         save_yous(conn, v, {"stated": (None, {}), "revealed": (None, {"x": object()})})

@@ -6,8 +6,8 @@ def test_ctx_has_both_domains(ctx):
         assert len(ctx.items[domain]) == len(ctx.index[domain]) > 0
         assert ctx.basis[domain].components.shape[1] == ctx.encoder.dim
         assert ctx.basis2d[domain].components.shape == (2, ctx.encoder.dim)
-    assert ctx.llm is None
-    assert ctx.settings.showdown_pairs == 3
+    assert not hasattr(ctx, "llm")
+    assert ctx.settings.retest_pairs == 2
 
 
 def test_load_context_opens_db_in_data_dir(ctx, fixture_data):

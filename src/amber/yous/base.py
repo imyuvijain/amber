@@ -13,8 +13,8 @@ import numpy as np
 from amber.config import NEUTRAL_PROMPT
 from amber.space.encoder import Encoder
 
-YouName = Literal["stated", "bigfive", "art", "values", "revealed"]
-YOU_ORDER: tuple[YouName, ...] = ("stated", "bigfive", "art", "values", "revealed")
+YouName = Literal["stated", "bigfive", "art", "revealed"]
+YOU_ORDER: tuple[YouName, ...] = ("stated", "bigfive", "art", "revealed")
 
 _EPS = 1e-6  # a direction shorter than this is float32 noise, not a direction
 
