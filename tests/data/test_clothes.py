@@ -115,7 +115,7 @@ def test_ingest_skips_corrupt_image(tmp_path, fake_rows):
 def test_ingest_logs_corrupt_image(tmp_path, fake_rows, caplog):
     with caplog.at_level(logging.WARNING, logger="amber.data.clothes"):
         ingest_clothes(tmp_path / "clothes", rows=fake_rows)
-    assert any("5" in r.getMessage() for r in caplog.records)
+    assert any("c:5" in r.getMessage() for r in caplog.records)
 
 
 def test_ingest_skips_undecodable_bytes(tmp_path, fake_rows):
