@@ -294,7 +294,7 @@ Expected: FAIL (module missing).
 Run: `uv run pytest tests/data/test_clothes.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Run the real ingest (about 10–30 min, in the background)**
+- [x] **Step 5: Run the real ingest (about 10–30 min, in the background)**
 
 Run: `uv run amber ingest clothes`
 Expected:
