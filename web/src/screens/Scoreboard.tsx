@@ -19,7 +19,7 @@ function order(scores: Score[]): Score[] {
 function headline(scores: Score[]): string {
   const ranked = [...scores].sort((a, b) => b.accuracy - a.accuracy)
   const [top, second] = ranked
-  if (!top) return 'No showdown picks yet.'
+  if (!top) return 'No clothing picks yet.'
   const name = youById(top.you).name
   if (!second || second.accuracy === top.accuracy) return `${name} is tied for the lead.`
   return top.ci_low > second.ci_high
@@ -27,7 +27,7 @@ function headline(scores: Score[]): string {
     : `${name} leads, but it is close.`
 }
 
-function Row({ score }: { score: Score }) {
+function Row({ score, late }: { score: Score; late?: Score }) {
   const you = youById(score.you)
   return (
     <li className="row" style={{ '--c': you.color } as CSSProperties}>
@@ -46,7 +46,10 @@ function Row({ score }: { score: Score }) {
           style={{ left: place(score.ci_low), width: `calc(${place(score.ci_high)} - ${place(score.ci_low)})` }}
         />
       </span>
-      <span className="row-num">{pct(score.accuracy)}</span>
+      <span className="row-num">
+        {pct(score.accuracy)}
+        <small className="row-late">{late ? pct(late.accuracy) : '–'}</small>
+      </span>
     </li>
   )
 }
@@ -81,21 +84,30 @@ export default function Scoreboard({ userId, reset }: ScreenProps) {
   }
   if (!results) return <p className="lede">Counting…</p>
 
+  const lateN = results.scores_late[0]?.n ?? 0
+  const lateLabel = lateN > 0 ? `picks ${results.n_clothes - lateN + 1}–${results.n_clothes}` : 'late picks'
+
   return (
     <section className="scoreboard">
-      <h1>{headline(results.scores)}</h1>
+      <h1>{headline(results.scores_all)}</h1>
       <p className="lede">
-        Each You predicted all {results.n_showdown} showdown pairs before you answered. Bars show
-        how often it was right; the whisker is the 95% range that sampling luck alone could explain.
+        Each You predicted all {results.n_clothes} clothing pairs before you answered. Bars show
+        how often it was right across all of them; the whisker is the 95% range that sampling luck
+        alone could explain. The small number is the same score over {lateLabel}, once Revealed
+        had time to learn from you.
       </p>
 
       <div className="chart">
         <div className="chart-head">
           <span className="coin">coin flip</span>
+          <span className="head-num">
+            <span>all {results.n_clothes}</span>
+            <span>{lateLabel}</span>
+          </span>
         </div>
         <ul className="rows">
-          {order(results.scores).map((s) => (
-            <Row key={s.you} score={s} />
+          {order(results.scores_all).map((s) => (
+            <Row key={s.you} score={s} late={results.scores_late.find((l) => l.you === s.you)} />
           ))}
         </ul>
         <div className="axis" aria-hidden="true">
