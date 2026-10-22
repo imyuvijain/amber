@@ -175,3 +175,44 @@ def test_ingest_art_failure_exits_nonzero(monkeypatch, tmp_path):
 def test_ingest_art_rejects_non_positive_n():
     result = CliRunner().invoke(app, ["ingest", "art", "--n", "0"])
     assert result.exit_code != 0 and "Invalid value" in result.output
+
+
+def test_serve_runs_uvicorn_on_the_loaded_context(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "amber.context.load_context",
+        lambda data_dir: seen.update(data_dir=data_dir) or "CTX",
+    )
+    monkeypatch.setattr("amber.api.app.create_app", lambda ctx: f"app({ctx})")
+    monkeypatch.setattr(
+        "uvicorn.run", lambda application, **kw: seen.update(app=application, **kw)
+    )
+    result = CliRunner().invoke(app, ["serve", "--port", "8765"])
+    assert result.exit_code == 0, result.output
+    assert seen == {
+        "data_dir": tmp_path,
+        "app": "app(CTX)",
+        "host": "127.0.0.1",
+        "port": 8765,
+    }
+
+
+def test_serve_defaults_and_host_option(monkeypatch):
+    seen = {}
+    monkeypatch.setattr("amber.context.load_context", lambda data_dir: "CTX")
+    monkeypatch.setattr("amber.api.app.create_app", lambda ctx: "app")
+    monkeypatch.setattr("uvicorn.run", lambda application, **kw: seen.update(kw))
+    CliRunner().invoke(app, ["serve"])
+    assert seen == {"host": "127.0.0.1", "port": 8000}
+    CliRunner().invoke(app, ["serve", "--host", "0.0.0.0"])
+    assert seen["host"] == "0.0.0.0"
+
+
+def test_serve_without_catalogs_explains_what_to_run(monkeypatch):
+    def missing(data_dir):
+        raise FileNotFoundError("items.parquet")
+
+    monkeypatch.setattr("amber.context.load_context", missing)
+    result = CliRunner().invoke(app, ["serve"])
+    assert result.exit_code == 1 and "amber ingest" in result.output
