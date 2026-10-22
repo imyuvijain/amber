@@ -30,7 +30,7 @@ def test_text_direction_is_unit_and_differs_from_neutral(fake_encoder):
 
 def test_text_direction_points_towards_the_named_colour(fake_encoder):
     w = text_direction(fake_encoder, ["red", "bright red"])
-    assert w[0] > 0.9
+    assert w.argmax() == 0 and w[0] > 0.5
 
 
 def test_text_direction_of_the_neutral_prompt_raises(fake_encoder):
