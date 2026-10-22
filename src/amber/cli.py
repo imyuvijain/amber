@@ -4,6 +4,7 @@ import atexit
 import logging
 import os
 import sys
+import traceback
 from typing import Annotated
 
 import typer
@@ -35,18 +36,22 @@ def ingest() -> None:
     logging.getLogger("amber").setLevel(logging.INFO)  # progress, without HTTP chatter
 
 
-def _exit_without_teardown() -> None:
-    """Leave now, after running Python-level exit handlers but skipping C++ teardown.
+def _exit_without_teardown(code: int = 0) -> None:
+    """Leave now with `code`, after running Python-level exit handlers but skipping C++ teardown.
 
-    A pyarrow/datasets stream that is abandoned half-way (as `--limit` does) leaves an
-    async read pending in Arrow's thread pool; at interpreter exit the pool's destructor
-    then waits on it forever (observed with pyarrow 26 / datasets 5.1). A stream that is
-    read to the end exits normally.
+    A pyarrow/datasets stream that is abandoned half-way leaves an async read pending in
+    Arrow's thread pool; at interpreter exit the pool's destructor then waits on it
+    forever (observed with pyarrow 26 / datasets 5.1). A stream read to the end exits
+    normally. A stream is abandoned by `--limit`, but equally by Ctrl-C, a network error
+    or a full disk, so every way out of the streaming call that is not a clean full read
+    comes through here.
     """
     sys.stdout.flush()
     sys.stderr.flush()
     atexit._run_exitfuncs()
-    os._exit(0)
+    sys.stdout.flush()  # exit handlers may have printed too
+    sys.stderr.flush()
+    os._exit(code)
 
 
 @ingest_app.command()
@@ -60,7 +65,12 @@ def clothes(
     from amber.data.clothes import ingest_clothes  # heavy deps; keep `--help` fast
 
     out_dir = config.DATA_DIR / "clothes"
-    items = ingest_clothes(out_dir, limit=limit)
+    try:
+        items = ingest_clothes(out_dir, limit=limit)
+    except BaseException:  # noqa: BLE001 - Ctrl-C, network error, disk full: stream abandoned
+        traceback.print_exc()
+        _exit_without_teardown(1)
+        raise typer.Exit(1) from None  # only reached when the exit above is stubbed
     typer.echo(f"{len(items)} clothing items in {out_dir}")
     if limit is not None:
-        _exit_without_teardown()
+        _exit_without_teardown(0)
