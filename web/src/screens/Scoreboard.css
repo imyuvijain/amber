@@ -6,7 +6,7 @@
 
 .chart {
   --name-w: 10.5rem;
-  --num-w: 3.5rem;
+  --num-w: 4.5rem;
   display: grid;
   margin-top: 0.5rem;
 }
@@ -123,9 +123,25 @@
 }
 
 .row-num {
-  text-align: right;
+  display: grid;
+  justify-items: end;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.row-late {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.head-num {
+  grid-column: 3;
+  grid-row: 1;
+  display: grid;
+  justify-items: end;
+  font-size: 0.75rem;
+  line-height: 1.1;
 }
 
 .note {
