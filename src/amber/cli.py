@@ -81,7 +81,9 @@ def art(
     n: Annotated[
         int,
         typer.Option(
-            min=1, help="How many artworks to collect (about 1 request per second)."
+            min=1,
+            help="How many artworks to collect, at about 1 request per second "
+            "(the API serves at most 1000 results per search).",
         ),
     ] = 2000,
 ) -> None:
