@@ -17,7 +17,7 @@ from amber.prefs.model import PreferenceModel
 _MAX_ROUNDS = 50
 
 
-def _sample_pairs(
+def sample_pairs(
     rng: np.random.Generator,
     allowed: np.ndarray,
     dup_vectors: np.ndarray,
@@ -28,7 +28,7 @@ def _sample_pairs(
     """Random pairs `(m, 2)` of row indices from `allowed`: distinct, not near-duplicates.
 
     Draws `draw` pairs per round until at least `need` valid ones are in hand (at most
-    `_MAX_ROUNDS` rounds); returns up to `need`. Raises ValueError if there is none.
+    `_MAX_ROUNDS` rounds); returns all the valid ones found (at least `need`, unless the rounds ran out). Raises ValueError if there is none.
     """
     if len(allowed) >= 2:
         found: list[np.ndarray] = []
@@ -46,7 +46,7 @@ def _sample_pairs(
             if count >= need:
                 break
         if count:
-            return np.concatenate(found)[:need]
+            return np.concatenate(found)
     raise ValueError(
         "No valid pair left to show (too few items, or all are near-duplicates)"
     )
@@ -76,7 +76,7 @@ def pick_pair_indices(
     near_dup_cos: float = NEAR_DUP_COS,
 ) -> tuple[int, int]:
     """`choose_pair` on row indices: `allowed` are the rows that may be shown."""
-    pairs = _sample_pairs(rng, allowed, dup_vectors, n_candidates, 1, near_dup_cos)
+    pairs = sample_pairs(rng, allowed, dup_vectors, n_candidates, 1, near_dup_cos)
     i, j = pairs[_most_informative(model, X, pairs)]
     return int(i), int(j)
 
@@ -111,6 +111,6 @@ def random_pair(
     near_dup_cos: float = NEAR_DUP_COS,
 ) -> tuple[str, str]:
     """A uniformly random pair of distinct, non-excluded, non-near-duplicate ids."""
-    pairs = _sample_pairs(rng, _allowed(ids, exclude), dup_vectors, 16, 1, near_dup_cos)
+    pairs = sample_pairs(rng, _allowed(ids, exclude), dup_vectors, 16, 1, near_dup_cos)
     i, j = pairs[0]
     return ids[int(i)], ids[int(j)]
