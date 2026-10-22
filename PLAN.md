@@ -925,7 +925,7 @@ git commit -m "feat: revealed-you and train/showdown pair flow with frozen predi
 
 `Item` is `{id, domain, title, thumb_url, labels: {…non-empty catalog columns}}`. In `reveal`, `true` means that You's prediction was on the side you chose.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_score_counts_abstain_as_half():
@@ -950,19 +950,19 @@ def test_every_served_item_has_thumbnail(client): ...   # GET thumb_url returns 
 def test_double_submit_is_safe(client): ...   # same choose twice → 200 both; different → 409
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/eval tests/api -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `metrics.py`, `app.py`, and `amber serve`.** Run `amber serve` with uvicorn, and serve `web/dist` at `/` if it exists. Add CORS for `http://localhost:5173`.
+- [x] **Step 3: Implement `metrics.py`, `app.py`, and `amber serve`.** Run `amber serve` with uvicorn, and serve `web/dist` at `/` if it exists. Add CORS for `http://localhost:5173`.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber tests
