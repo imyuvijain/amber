@@ -845,7 +845,7 @@ git commit -m "feat: You type, stated-you, builder registry, app context"
     - excludes `shown_ids` for that domain
   - `progress(conn, user_id, domain, phase, ctx) -> dict`, shaped `{"done": int, "total": int}`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_build_revealed_ignores_showdown_choices(ctx, user):
@@ -877,19 +877,19 @@ def test_pairs_never_repeat_items(ctx, user):
 
 `play_train`, `play_showdown` and `play_art` live in `tests/conftest.py`. They're test helpers that loop `next_pair` and `answer_pair` (for clothes train, clothes showdown, or art train), choosing with a `SimulatedUser` whose `w` points at the `prefer` color dim (a coin flip when `prefer` is omitted). Each returns the answered `Choice` list.
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/yous/test_revealed.py tests/test_flow.py -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `revealed.py` and `flow.py`.** Use `rng = np.random.default_rng(hash((SEED, user_id, domain, phase, n_done)) & 0xFFFFFFFF)` so pairs are reproducible per user.
+- [x] **Step 3: Implement `revealed.py` and `flow.py`.** Use `rng = np.random.default_rng(hash((SEED, user_id, domain, phase, n_done)) & 0xFFFFFFFF)` so pairs are reproducible per user.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber tests
