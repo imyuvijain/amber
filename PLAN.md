@@ -981,9 +981,9 @@ git commit -m "feat: showdown scoring with bootstrap CIs; FastAPI v1"
   - `web/src/api.ts` exports typed functions `createUser`, `setFilters`, `setDescribe`, `nextPair`, `choose` and `getResults`, mirroring the route table
   - the current `user_id` is kept in `localStorage` (wrapped in try/catch) so a reload resumes
 
-- [ ] **Step 1: Invoke the `frontend-design` skill** to set the visual direction. Then scaffold with `npm create vite@latest web -- --template react-ts` and `npm i react-router-dom`.
+- [x] **Step 1: Invoke the `frontend-design` skill** to set the visual direction. Then scaffold with `npm create vite@latest web -- --template react-ts` and `npm i react-router-dom`.
 
-- [ ] **Step 2: Build the screens.** Each one has a single job:
+- [x] **Step 2: Build the screens.** Each one has a single job:
   - **Describe:** a textarea with the prompt "Describe your style in a sentence or two."
   - **Sections:** gender and section toggles, which call `setFilters`
   - **ThisOrThat** (reused for art in Task 13):
@@ -994,7 +994,7 @@ git commit -m "feat: showdown scoring with bootstrap CIs; FastAPI v1"
   - **Showdown:** the same layout. After each pick it briefly shows which yous called it, along with a running tally.
   - **Scoreboard:** one row per You with an accuracy bar, the 95% CI as a whisker, and a dashed line at 50% labeled "coin flip"
 
-- [ ] **Step 3: Add `.claude/launch.json`** with two configs: `api` (`uv run amber serve`, port 8000) and `web` (`npm --prefix web run dev`, port 5173).
+- [x] **Step 3: Add `.claude/launch.json`** with two configs: `api` (`uv run amber serve`, port 8000) and `web` (`npm --prefix web run dev`, port 5173).
 
 - [ ] **Step 4: Verify in the browser.** Start both servers with `preview_start`, then play the whole flow at real settings (40 + 20). Confirm:
   - (a) a reload mid-pair resumes the same pair
@@ -1003,7 +1003,7 @@ git commit -m "feat: showdown scoring with bootstrap CIs; FastAPI v1"
 
   Take a screenshot of the scoreboard.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add web .claude/launch.json
