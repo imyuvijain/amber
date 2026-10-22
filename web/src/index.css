@@ -1,0 +1,209 @@
+/* Amber. Cool mist paper, ink-blue text, and one warm thing: resin amber, the color of
+   the Revealed You. Each You has a fixed color (--you-*), reused everywhere. */
+
+:root {
+  --paper: #e7ebf1;
+  --panel: #ffffff;
+  --ink: #141b2b;
+  --muted: #566176;
+  --line: #c6cfdb;
+  --amber: #e8890c;
+  --on-amber: #1c1304;
+  --focus: #1f4fd1;
+  --danger: #b3261e;
+
+  --you-stated: #3366d9;
+  --you-bigfive: #0f9d8a;
+  --you-art: #cc3d96;
+  --you-values: #7c4ddb;
+  --you-revealed: #e8890c;
+
+  --radius: 14px;
+  --radius-lg: 22px;
+  --shadow: 0 1px 0 rgb(20 27 43 / 0.04), 0 12px 32px -16px rgb(20 27 43 / 0.28);
+  --font: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #0d1119;
+    --panel: #171d29;
+    --ink: #e9edf4;
+    --muted: #97a2b6;
+    --line: #2a3344;
+    --amber: #f5a030;
+    --on-amber: #1c1304;
+    --focus: #8fb0ff;
+    --danger: #ff8a80;
+
+    --you-stated: #6c93f0;
+    --you-bigfive: #35c2ae;
+    --you-art: #ec6db9;
+    --you-values: #a07cf2;
+    --you-revealed: #f5a030;
+
+    --shadow: 0 1px 0 rgb(255 255 255 / 0.04), 0 14px 36px -16px rgb(0 0 0 / 0.7);
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variation-settings: 'wdth' 80;
+  font-stretch: 80%;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 1.2rem + 6.4vw, 5rem);
+}
+
+h2 {
+  font-size: clamp(1.9rem, 1.2rem + 3vw, 3rem);
+}
+
+.lede {
+  color: var(--muted);
+  max-width: 34rem;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---- buttons ---- */
+
+.btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 1.5rem;
+  border-radius: 999px;
+  background: var(--amber);
+  color: var(--on-amber);
+  font-weight: 650;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  background: var(--line);
+  color: var(--muted);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  filter: none;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.link {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+/* ---- the You bead: a small resin drop in the You's color ---- */
+
+.bead {
+  --size: 0.9rem;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, rgb(255 255 255 / 0.7) 0 12%, transparent 30%), var(--c);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12) inset;
+}
+
+/* ---- notes ---- */
+
+.error {
+  color: var(--danger);
+  font-weight: 550;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
