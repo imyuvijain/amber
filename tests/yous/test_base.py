@@ -5,8 +5,8 @@ from amber.config import NEUTRAL_PROMPT
 from amber.yous.base import YOU_ORDER, You, predict, text_direction
 
 
-def test_you_order_lists_all_five_yous():
-    assert YOU_ORDER == ("stated", "bigfive", "art", "values", "revealed")
+def test_you_order_lists_all_four_yous():
+    assert YOU_ORDER == ("stated", "bigfive", "art", "revealed")
 
 
 def test_predict_sign_and_abstain():

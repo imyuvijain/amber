@@ -38,10 +38,9 @@ SEARCH_LAMBDA = 1.0
 @dataclass(frozen=True)
 class Settings:
     art_train_pairs: int
-    clothes_train_pairs: int
-    showdown_pairs: int
+    clothes_pairs: int  # scored clothing picks (phase "showdown")
     retest_pairs: int
     retest_min_days: int
 
 
-DEFAULT_SETTINGS = Settings(30, 40, 20, 10, 7)
+DEFAULT_SETTINGS = Settings(20, 40, 20, 7)

@@ -11,7 +11,7 @@ def test_constants():
     assert config.SEED == 7 and config.PCA_DIM == 32 and config.NEAR_DUP_COS == 0.95
     assert config.KEEP_MASTER_CATEGORIES == ("Apparel", "Footwear", "Accessories")
     assert config.THUMB_SIZE == (216, 288)
-    assert config.DEFAULT_SETTINGS == config.Settings(30, 40, 20, 10, 7)
+    assert config.DEFAULT_SETTINGS == config.Settings(20, 40, 20, 7)
 
 
 def test_remaining_constants():
@@ -26,10 +26,10 @@ def test_remaining_constants():
 
 def test_settings_fields_and_frozen():
     s = config.DEFAULT_SETTINGS
-    assert (s.art_train_pairs, s.clothes_train_pairs, s.showdown_pairs) == (30, 40, 20)
-    assert (s.retest_pairs, s.retest_min_days) == (10, 7)
+    assert (s.art_train_pairs, s.clothes_pairs) == (20, 40)
+    assert (s.retest_pairs, s.retest_min_days) == (20, 7)
     with pytest.raises(dataclasses.FrozenInstanceError):
-        s.showdown_pairs = 1  # type: ignore[misc]
+        s.clothes_pairs = 1  # type: ignore[misc]
 
 
 def test_data_dir_from_env(monkeypatch, tmp_path):
