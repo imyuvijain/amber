@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fakes import play_art, play_showdown, play_train, red_and_blue_centered
+from fakes import play_art, play_clothes, red_and_blue_centered
 
 from amber.yous.art_taste import art_direction, build_art
 from amber.yous.base import predict
@@ -12,13 +12,13 @@ def test_art_is_registered():
 
 
 def test_art_direction_rejects_clothes_choices(ctx, user):
-    clothes = play_train(ctx, user, prefer="red", n=1)
+    clothes = play_clothes(ctx, user, prefer="red", n=1)
     with pytest.raises(ValueError):
         art_direction(clothes, ctx.index["art"], ctx.basis["art"])
 
 
 def test_art_direction_rejects_a_mixed_list(ctx, user):
-    mixed = play_art(ctx, user, prefer="red", n=5) + play_train(ctx, user, n=1)
+    mixed = play_art(ctx, user, prefer="red", n=5) + play_clothes(ctx, user, n=1)
     with pytest.raises(ValueError):
         art_direction(mixed, ctx.index["art"], ctx.basis["art"])
 
@@ -62,8 +62,7 @@ def test_blue_art_lover_predicts_blue_clothes(ctx, user):
 
 
 def test_art_you_ignores_clothes_choices(ctx, user):
-    play_train(ctx, user, prefer="blue", n=6)
-    play_showdown(ctx, user, prefer="blue", n=3)
+    play_clothes(ctx, user, prefer="blue", n=9)
     assert build_art(ctx.conn, user, ctx).w is None
     play_art(ctx, user, prefer="red", n=6)
     you = build_art(ctx.conn, user, ctx)
