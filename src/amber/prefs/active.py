@@ -27,8 +27,10 @@ def sample_pairs(
 ) -> np.ndarray:
     """Random pairs `(m, 2)` of row indices from `allowed`: distinct, not near-duplicates.
 
-    Draws `draw` pairs per round until at least `need` valid ones are in hand (at most
-    `_MAX_ROUNDS` rounds); returns all the valid ones found (at least `need`, unless the rounds ran out). Raises ValueError if there is none.
+    Draws `draw` pairs per round and keeps the valid ones, stopping after the first round
+    that brings the total to `need` or more (at most `_MAX_ROUNDS` rounds). Returns every
+    valid pair collected, in random order, so there can be more than `need` (or fewer, if
+    the rounds ran out); callers truncate. Raises ValueError if there is no valid pair.
     """
     if len(allowed) >= 2:
         found: list[np.ndarray] = []

@@ -70,7 +70,11 @@ def _one_user(
 
     pairs = sample_pairs(
         rng, np.flatnonzero(~seen), dup_vectors, 2 * n_test, n_test, near_dup
-    )
+    )[:n_test]  # the sampler may return more than asked for; score exactly n_test
+    if len(pairs) < n_test:
+        raise ValueError(
+            f"Only {len(pairs)} valid held-out pairs found, wanted n_test={n_test}"
+        )
     hits = 0
     for i, j in pairs:
         predicted_a = model.p_prefer(X[i], X[j]) > 0.5
