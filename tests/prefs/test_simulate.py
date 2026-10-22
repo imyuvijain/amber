@@ -1,4 +1,6 @@
 import numpy as np
+from synthetic_catalog import synthetic_catalog
+
 from amber.prefs.simulate import SimulatedUser, run_benchmark
 
 SEED = 7
@@ -23,8 +25,8 @@ def test_simulated_coin_flip_clicker():
     assert 0.4 < np.mean(picks) < 0.6
 
 
-def test_active_beats_random(catalog):
-    X, D, _ = catalog
+def test_active_beats_random():
+    X, D, _ = synthetic_catalog()
     kw = {
         "n_users": 20,
         "n_train": 40,
@@ -37,8 +39,8 @@ def test_active_beats_random(catalog):
     assert act > rnd and act >= 0.70
 
 
-def test_random_clicker_is_near_chance(catalog):
-    X, D, _ = catalog
+def test_random_clicker_is_near_chance():
+    X, D, _ = synthetic_catalog()
     acc = run_benchmark(
         X,
         D,
@@ -53,8 +55,8 @@ def test_random_clicker_is_near_chance(catalog):
     assert 0.40 <= acc <= 0.60
 
 
-def test_benchmark_is_reproducible(catalog):
-    X, D, _ = catalog
+def test_benchmark_is_reproducible():
+    X, D, _ = synthetic_catalog()
     kw = {
         "n_users": 3,
         "n_train": 10,

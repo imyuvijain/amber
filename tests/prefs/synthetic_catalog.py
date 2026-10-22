@@ -1,15 +1,11 @@
+import functools
+
 import numpy as np
-import pytest
 
 SEED = 7
 
 
-@pytest.fixture(scope="session")
-def catalog():
-    """(X, D, ids): 500 synthetic projected items, their full embeddings and ids."""
-    return synthetic_catalog()
-
-
+@functools.cache
 def synthetic_catalog(n: int = 500, k: int = 32, seed: int = SEED):
     """`n` points in `k` dims with cluster structure, scaled like the real projected
     clothes (mean row norm ~0.75, variance decaying across components), plus
