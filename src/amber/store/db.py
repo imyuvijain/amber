@@ -131,6 +131,13 @@ def create_user(conn: sqlite3.Connection, name: str) -> str:
     return user_id
 
 
+def user_exists(conn: sqlite3.Connection, user_id: str) -> bool:
+    return (
+        conn.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        is not None
+    )
+
+
 def save_answer(
     conn: sqlite3.Connection, user_id: str, kind: AnswerKind, key: str, value: str
 ) -> None:
