@@ -3,6 +3,8 @@ import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
 import Describe from './screens/Describe'
 import Sections from './screens/Sections'
+import Showdown from './screens/Showdown'
+import ThisOrThat from './screens/ThisOrThat'
 import Welcome from './screens/Welcome'
 import { clearSession, loadStep, loadUserId, saveStep, saveUserId } from './storage'
 import { isStepId, stepAfter } from './steps'
@@ -11,6 +13,8 @@ import { isStepId, stepAfter } from './steps'
 const SCREENS: Record<string, ComponentType<ScreenProps>> = {
   describe: Describe,
   sections: Sections,
+  train: ThisOrThat,
+  showdown: Showdown,
 }
 
 function initial(): { userId: string | null; step: string } {
