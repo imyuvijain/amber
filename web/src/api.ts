@@ -1,6 +1,7 @@
 // Typed client for the Amber API (src/amber/api/app.py). One function per route.
 
 export type Domain = 'clothes' | 'art'
+// Art uses 'train'; clothes use 'showdown' (the one scored phase).
 export type Phase = 'train' | 'showdown' | 'retest'
 
 export interface Item {
@@ -29,7 +30,7 @@ export interface Finished {
   progress: Progress
 }
 
-/** For showdown pairs: whether each You called it. Abstaining Yous are absent. */
+/** For clothes pairs: whether each You called it. Abstaining Yous are absent. */
 export type Reveal = Record<string, boolean>
 
 export interface Chosen {
@@ -47,8 +48,13 @@ export interface Score {
 }
 
 export interface Results {
-  scores: Score[]
-  n_showdown: number
+  /** Every clothes pick. */
+  scores_all: Score[]
+  /** The second half of the picks (21-40 of 40). */
+  scores_late: Score[]
+  /** Rolling accuracy per pick, by You. */
+  curves: Record<string, number[]>
+  n_clothes: number
 }
 
 /** An HTTP error carrying the server's `detail` and status. */
