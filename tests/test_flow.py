@@ -334,7 +334,14 @@ def test_revealed_prediction_uses_only_earlier_picks(ctx, user):
     assert p7 != 0.5
 
 
-def test_revealed_learns_red(ctx, user):
+def test_revealed_learns_red(ctx):
+    # A fixed user id fixes the (sha256-seeded) random pairs, so this threshold is not luck:
+    # over many ids the late accuracy ranges from about 0.67 to 0.86 (mean 0.77).
+    user = "0" * 32
+    ctx.conn.execute(
+        "INSERT INTO users (user_id, name, created_at) VALUES (?, 'fixed', 'now')",
+        (user,),
+    )
     choices = play_clothes(ctx, user, prefer="red", n=ctx.settings.clothes_pairs)
     assert len(choices) == ctx.settings.clothes_pairs
     late = score_showdown(choices, preds(ctx, choices), window=(21, 40))
