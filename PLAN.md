@@ -1030,7 +1030,7 @@ git commit -m "feat: web app v1 — this-or-that, showdown, scoreboard"
   - fewer than 5 choices means abstain
 - Produces: `art_direction(choices: list[Choice], index: VectorIndex, basis: Basis) -> np.ndarray | None`, a pure helper that raises `ValueError` if any choice has `domain != "art"`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_art_direction_rejects_clothes_choices(ctx, user):
@@ -1045,19 +1045,19 @@ def test_red_art_lover_predicts_red_clothes(ctx, user):   # FakeEncoder shares t
     play_art(ctx, user, prefer="red", n=6); assert predict(build_art(ctx.conn, user, ctx), *red_and_blue_centered(ctx)) == 1.0
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/yous/test_art_taste.py -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement it, then wire the flow and UI.**
+- [x] **Step 3: Implement it, then wire the flow and UI.**
 
-- [ ] **Step 4: Run the tests and confirm they pass, then verify in the browser** that the art step appears before clothes and that the scoreboard shows an `art` row.
+- [x] **Step 4: Run the tests and confirm they pass, then verify in the browser** that the art step appears before clothes and that the scoreboard shows an `art` row.
 
 Run: `uv run pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber tests web
