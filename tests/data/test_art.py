@@ -50,6 +50,7 @@ class FakeAIC:
         self.images = images
         self.requests: list[httpx.Request] = []
         self.faults = []
+        self.window = 1000  # the live API refuses to page past this many results
 
     @property
     def searches(self):
@@ -69,6 +70,15 @@ class FakeAIC:
             assert request.method == "POST" and request.url.host == "api.artic.edu"
             body = json.loads(request.content)
             page, limit = body["page"], body["limit"]
+            if page * limit > self.window:  # what api.artic.edu answers (checked live)
+                return httpx.Response(
+                    403,
+                    json={
+                        "status": 403,
+                        "error": "Invalid number of results",
+                        "detail": "You have requested too many results.",
+                    },
+                )
             chunk = self.artworks[(page - 1) * limit : page * limit]
             pages = -(-len(self.artworks) // limit)
             pagination = {
@@ -111,12 +121,11 @@ def seen_requests(aic):
     return aic.requests
 
 
-def _many(count, **kwargs):
+def _many(count, size=(400, 300), **kwargs):
     """`count` artworks (ids 1..count) with a servable image each."""
     artworks = [_artwork(i, **kwargs) for i in range(1, count + 1)]
-    return FakeAIC(
-        artworks, {f"img-{i}": _jpeg((400, 300)) for i in range(1, count + 1)}
-    )
+    image = _jpeg(size)
+    return FakeAIC(artworks, {f"img-{i}": image for i in range(1, count + 1)})
 
 
 class FakeClock:
@@ -323,12 +332,31 @@ def test_stops_after_a_short_page_even_without_pagination_info(tmp_path, monkeyp
 
 
 def test_never_asks_for_a_page_the_api_refuses(tmp_path, monkeypatch):
-    # the API answers 403 for anything past 10,000 results (page 101 at 100 per page)
     monkeypatch.setattr(art, "PAGE_SIZE", 1)
-    monkeypatch.setattr(art, "MAX_PAGES", 3)
+    monkeypatch.setattr(art, "MAX_RESULTS", 3)
     aic = _many(10)
+    aic.window = 3  # a fourth page would be answered with a 403
     df = ingest_art(tmp_path, n=10, client=aic.client(), min_interval=0)
     assert len(df) == 3 and len(aic.searches) == 3
+
+
+def test_the_apis_real_1000_result_window_caps_the_catalog(tmp_path, caplog):
+    # api.artic.edu answers 403 for page 11 at 100 per page: the first 1000 results are
+    # all a search can reach, so asking for 2000 yields at most 1000, with a warning
+    aic = _many(1500, size=(32, 24))
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        df = ingest_art(tmp_path, n=2000, client=aic.client(), min_interval=0)
+    assert len(df) == 1000
+    assert [json.loads(r.content)["page"] for r in aic.searches] == list(range(1, 11))
+    assert any("1000" in r.getMessage() for r in caplog.records)
+
+
+def test_asking_for_more_than_the_window_warns_up_front(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        ingest_art(tmp_path, n=1001, client=_many(2).client(), min_interval=0)
+    assert any(
+        "1001" in r.getMessage() and "1000" in r.getMessage() for r in caplog.records
+    )
 
 
 def test_an_artwork_repeated_on_a_later_page_counts_once(tmp_path, monkeypatch):
