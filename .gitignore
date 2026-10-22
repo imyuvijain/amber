@@ -6,3 +6,4 @@ web/dist/
 .claude/settings.local.json
 __pycache__/
 .DS_Store
+.superpowers/
