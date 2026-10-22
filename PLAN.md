@@ -996,7 +996,7 @@ git commit -m "feat: showdown scoring with bootstrap CIs; FastAPI v1"
 
 - [x] **Step 3: Add `.claude/launch.json`** with two configs: `api` (`uv run amber serve`, port 8000) and `web` (`npm --prefix web run dev`, port 5173).
 
-- [ ] **Step 4: Verify in the browser.** Start both servers with `preview_start`, then play the whole flow at real settings (40 + 20). Confirm:
+- [x] **Step 4: Verify in the browser.** Start both servers with `preview_start`, then play the whole flow at real settings (40 + 20). Confirm:
   - (a) a reload mid-pair resumes the same pair
   - (b) a fast double-click records one answer
   - (c) the scoreboard shows stated and revealed
