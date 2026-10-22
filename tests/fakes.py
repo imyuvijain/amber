@@ -293,11 +293,6 @@ def _play(ctx, user: str, domain: str, phase: str, prefer: str | None, n: int) -
     return answered
 
 
-def play_train(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
-    """Answer `n` clothes train pairs; returns the answered `Choice`s."""
-    return _play(ctx, user, "clothes", "train", prefer, n)
-
-
 def play_clothes(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
     """Answer `n` scored clothes pairs (phase `showdown`); the first call freezes the Yous."""
     return _play(ctx, user, "clothes", "showdown", prefer, n)
@@ -329,11 +324,6 @@ def revealed_p_a_from(earlier: list, pair, ctx) -> float:
         model.update(win, lose)
     a, b = basis.project(index.centered([pair.a_id, pair.b_id]))
     return model.p_prefer(a, b)
-
-
-def play_showdown(ctx, user: str, prefer: str | None = None, n: int = 3) -> list:
-    """Answer `n` clothes showdown pairs (the first call freezes the Yous)."""
-    return _play(ctx, user, "clothes", "showdown", prefer, n)
 
 
 def play_art(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
