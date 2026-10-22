@@ -50,7 +50,9 @@ def build_revealed(conn: sqlite3.Connection, user_id: str, ctx: "AppContext") ->
     choices = list_choices(conn, user_id, domain="clothes", phase="train")
     meta: dict = {"n": len(choices)}
     if len(choices) < MIN_CHOICES:
-        return You("revealed", None, {**meta, "reason": f"fewer than {MIN_CHOICES} choices"})
+        return You(
+            "revealed", None, {**meta, "reason": f"fewer than {MIN_CHOICES} choices"}
+        )
     model = train_preference_model(choices, ctx.index["clothes"], ctx.basis["clothes"])
     direction = np.asarray(ctx.basis["clothes"].lift(model.mean), dtype=np.float64)
     norm = np.linalg.norm(direction)
