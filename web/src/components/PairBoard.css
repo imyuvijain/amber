@@ -1,0 +1,100 @@
+.board {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.75rem, 3vw, 2rem);
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+/* Product photos are 3:4 on white, so the tile is a white mat in both themes. */
+.tile {
+  appearance: none;
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.tile[data-state='open']:hover:not(:disabled) {
+  transform: translateY(-3px);
+}
+
+/* Picked: lit from within, like a specimen caught in resin. */
+.tile[data-state='picked'] {
+  transform: scale(1.025);
+  box-shadow:
+    0 0 0 4px var(--amber),
+    0 0 44px -2px color-mix(in srgb, var(--amber) 60%, transparent);
+}
+
+.tile[data-state='passed'] {
+  opacity: 0.4;
+  transform: scale(0.97);
+}
+
+.tile:disabled {
+  cursor: default;
+}
+
+.board-or {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 0 0 5px var(--paper);
+  pointer-events: none;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.progress-track {
+  flex: 1;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--amber);
+  transition: width 0.35s ease;
+}
+
+.progress-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.95rem;
+  min-width: 5.5ch;
+  text-align: right;
+}
