@@ -354,7 +354,7 @@ Expected: FAIL.
 Run: `uv run pytest tests/data/test_art.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Run the real fetch (about 35–70 min at 1 request per second, in the background)**
+- [x] **Step 5: Run the real fetch (about 35–70 min at 1 request per second, in the background)**
 
 Run: `uv run amber ingest art --n 2000`
 Expected: 1,900–2,000 rows, and `du -sh data/art` under 100M.
