@@ -4,12 +4,15 @@ Timestamps are timezone-aware UTC, stored as ISO-8601 strings with fixed
 microsecond precision so they round-trip exactly and sort lexically.
 """
 
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+
+import numpy as np
 
 Domain = Literal["clothes", "art"]
 Phase = Literal["train", "showdown", "retest"]
@@ -287,3 +290,60 @@ def shown_ids(conn: sqlite3.Connection, user_id: str, domain: str) -> set[str]:
         (user_id, domain),
     )
     return {item for row in rows for item in row}
+
+
+# --- predictions -------------------------------------------------------------
+
+
+def save_predictions(
+    conn: sqlite3.Connection,
+    pair_id: str,
+    preds: dict[str, float],
+    now: datetime | None = None,
+) -> None:
+    """Save each You's P(a) for a pair (upsert per You). Unknown pair raises NotFound."""
+    created = _iso(_utc(now))
+    with conn:
+        _get_pair(conn, pair_id)
+        conn.executemany(
+            "INSERT INTO predictions (pair_id, you, p_a, created_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (pair_id, you) DO UPDATE SET p_a = excluded.p_a, "
+            "created_at = excluded.created_at",
+            [(pair_id, you, float(p), created) for you, p in preds.items()],
+        )
+
+
+def get_predictions(conn: sqlite3.Connection, pair_id: str) -> dict[str, float]:
+    rows = conn.execute(
+        "SELECT you, p_a FROM predictions WHERE pair_id = ?", (pair_id,)
+    )
+    return {you: p for you, p in rows}
+
+
+# --- frozen yous -------------------------------------------------------------
+
+
+def save_you(
+    conn: sqlite3.Connection, user_id: str, name: str, w: np.ndarray | None, meta: dict
+) -> None:
+    """Freeze a You: ``w`` as float32 bytes (None -> NULL), ``meta`` as JSON. Upsert."""
+    blob = None if w is None else np.ascontiguousarray(w, dtype=np.float32).tobytes()
+    with conn:
+        conn.execute(
+            "INSERT INTO yous (user_id, name, w, meta) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (user_id, name) DO UPDATE SET w = excluded.w, meta = excluded.meta",
+            (user_id, name, blob, json.dumps(meta)),
+        )
+
+
+def load_yous(
+    conn: sqlite3.Connection, user_id: str
+) -> dict[str, tuple[np.ndarray | None, dict]]:
+    rows = conn.execute("SELECT name, w, meta FROM yous WHERE user_id = ?", (user_id,))
+    return {
+        name: (
+            None if blob is None else np.frombuffer(blob, dtype=np.float32).copy(),
+            json.loads(meta),
+        )
+        for name, blob, meta in rows
+    }
