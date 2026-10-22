@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from conftest import FakeEncoder, build_fixture_data
+from fakes import FakeEncoder, build_fixture_data
 
 
 def _thumb(data_dir, domain, colour):
@@ -67,7 +67,7 @@ def test_fake_encoder_is_stable_across_processes(fixture_data):
     # builtin hash() is salted per process; the encoder must seed from hashlib instead
     code = (
         "import sys; sys.path.insert(0, sys.argv[1])\n"
-        "from conftest import FakeEncoder\n"
+        "from fakes import FakeEncoder\n"
         "e = FakeEncoder()\n"
         "print(e.embed_texts(['hello'])[0].tolist(), e.embed_images([sys.argv[2]])[0].tolist())\n"
     )

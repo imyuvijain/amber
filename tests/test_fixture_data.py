@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from conftest import build_fixture_data
+from fakes import build_fixture_data
 from PIL import Image
 
 CLOTHES_COLUMNS = [

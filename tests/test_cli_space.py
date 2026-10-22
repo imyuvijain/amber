@@ -2,7 +2,7 @@
 shrink-thumbs. The real CLIP model is swapped for the model-free FakeEncoder."""
 
 import pytest
-from conftest import FakeEncoder
+from fakes import FakeEncoder
 from PIL import Image
 from typer.testing import CliRunner
 
