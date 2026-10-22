@@ -9,10 +9,20 @@ On disk an index is `vectors.npy` + `ids.json` inside a directory.
 """
 
 import json
+import logging
+import os
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+
+from amber import config
+from amber.data.catalog import load_items, thumb_path
+from amber.space.basis import Basis
+from amber.space.encoder import Encoder
+
+log = logging.getLogger(__name__)
 
 VECTORS_FILE = "vectors.npy"
 IDS_FILE = "ids.json"
@@ -135,3 +145,70 @@ class VectorIndex:
         order = np.argsort(-scores, kind="stable")[:k]
         row_of = order if rows is None else rows[order]
         return [(self.ids[r], float(s)) for r, s in zip(row_of, scores[order])]
+
+
+# --- embedding a whole catalog -----------------------------------------------------
+
+_CHUNK = 1024  # images per encoder call: bounds memory and sets the progress cadence
+
+
+def model_slug(encoder: Encoder) -> str:
+    """Directory name of an embedding space: `"ViT-B-32__laion2b_s34b_b79k"`."""
+    return f"{encoder.model_name}__{encoder.pretrained}"
+
+
+def embed_dir(domain: str, encoder: Encoder, data_dir: Path | None = None) -> Path:
+    """Where `embed_domain` writes the embeddings of `domain` made by `encoder`."""
+    root = config.DATA_DIR if data_dir is None else Path(data_dir)
+    return root / domain / "emb" / model_slug(encoder)
+
+
+def embed_domain(
+    domain: str, encoder: Encoder, data_dir: Path | None = None
+) -> VectorIndex:
+    """Embed every thumbnail of `domain` and save the result under
+    `<data_dir>/<domain>/emb/<model_slug>/`:
+
+    * the `VectorIndex` files (`vectors.npy`, `ids.json`), one row per catalog item, in
+      catalog order;
+    * `basis/`: a `Basis` of `config.PCA_DIM` components fit on the centered vectors;
+    * `basis2d/`: a 2-component `Basis` (for plotting).
+
+    Everything is written to a temporary directory first and renamed into place, so an
+    interrupted run never leaves a half-written embedding directory behind. An earlier
+    embedding by the same model is replaced.
+    """
+    root = config.DATA_DIR if data_dir is None else Path(data_dir)
+    items = load_items(domain, data_dir=root)  # raises ValueError for an unknown domain
+    ids = items["id"].tolist()
+    paths = [thumb_path(i, data_dir=root) for i in ids]
+
+    final = embed_dir(domain, encoder, root)
+    tmp = final.with_name(f".{final.name}.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)  # a crashed earlier run
+    try:
+        parts = []
+        for start in range(0, len(paths), _CHUNK):
+            parts.append(encoder.embed_images(paths[start : start + _CHUNK]))
+            log.info(
+                "embedded %d / %d %s images", start + len(parts[-1]), len(paths), domain
+            )
+        vectors = (
+            np.concatenate(parts) if parts else np.zeros((0, encoder.dim), np.float32)
+        )
+        index = VectorIndex(ids, vectors)
+
+        centered = index.centered(index.ids)
+        index.save(tmp)
+        Basis.fit(centered, k=config.PCA_DIM).save(tmp / "basis")
+        Basis.fit(centered, k=2).save(tmp / "basis2d")
+
+        old = final.with_name(f".{final.name}.old")
+        shutil.rmtree(old, ignore_errors=True)
+        if final.exists():
+            os.replace(final, old)
+        os.replace(tmp, final)
+        shutil.rmtree(old, ignore_errors=True)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return index
