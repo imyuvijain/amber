@@ -328,7 +328,7 @@ git commit -m "feat: stream clothing catalog into thumbnails + parquet"
   - fields: `id,title,artist_title,date_display,artwork_type_title,image_id`, 100 per page
   - images: `https://www.artic.edu/iiif/2/<image_id>/full/843,/0/default.jpg`
 
-- [ ] **Step 1: Write the failing tests** using `httpx.MockTransport` (search returns 3 records, one image request returns 404)
+- [x] **Step 1: Write the failing tests** using `httpx.MockTransport` (search returns 3 records, one image request returns 404)
 
 ```python
 def test_ingest_art_filters_and_prefixes(tmp_path, mock_client):
@@ -342,14 +342,14 @@ def test_ingest_art_sends_user_agent(tmp_path, mock_client, seen_requests):
     assert all(r.headers["AIC-User-Agent"].startswith("amber") for r in seen_requests)
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/data/test_art.py -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `ingest_art`.** Throttle with `min_interval` seconds between all requests. Make it resumable the same way as Task 2.
+- [x] **Step 3: Implement `ingest_art`.** Throttle with `min_interval` seconds between all requests. Make it resumable the same way as Task 2.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/data/test_art.py -q`
 Expected: PASS.
@@ -359,7 +359,7 @@ Expected: PASS.
 Run: `uv run amber ingest art --n 2000`
 Expected: 1,900–2,000 rows, and `du -sh data/art` under 100M.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/amber/data/art.py src/amber/cli.py tests/data/test_art.py
