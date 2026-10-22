@@ -39,7 +39,7 @@ def test_art_you_is_unit_and_abstains_when_short(ctx, user):
     play_art(ctx, user, prefer="red", n=4)
     short = build_art(ctx.conn, user, ctx)
     assert short.name == "art" and short.w is None
-    assert short.meta["reason"] == "fewer than 5 art choices"
+    assert short.meta == {"reason": "fewer than 5 art choices"}
     play_art(ctx, user, prefer="red", n=2)  # now 6 total
     you = build_art(ctx.conn, user, ctx)
     assert np.isclose(np.linalg.norm(you.w), 1)
