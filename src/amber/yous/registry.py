@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from amber.yous.base import You, YouName
+from amber.yous.revealed import build_revealed
 from amber.yous.stated import build_stated
 
 if TYPE_CHECKING:
@@ -15,7 +16,10 @@ log = logging.getLogger(__name__)
 
 Builder = Callable[[sqlite3.Connection, str, "AppContext"], You]
 
-BUILDERS: dict[YouName, Builder] = {"stated": build_stated}
+BUILDERS: dict[YouName, Builder] = {
+    "stated": build_stated,
+    "revealed": build_revealed,
+}
 
 
 def build_all_yous(
