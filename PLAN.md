@@ -462,7 +462,7 @@ git commit -m "feat: encoder, vector index, PCA basis"
     - `amber eval-space --model NAME --pretrained TAG`
     - `amber search-text "query"` writes `data/contact_sheet.jpg` showing the top 12 thumbnails
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_label_retrieval_perfect_encoder():
@@ -477,35 +477,35 @@ def test_embed_domain_writes_index_and_bases(fixture_data, fake_encoder):
     assert len(idx.ids) == 96 and (fixture_data / "clothes" / "emb").exists()
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/space/test_evaluate.py -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `label_retrieval_score`, `embed_domain`, and the CLI commands.**
+- [x] **Step 3: Implement `label_retrieval_score`, `embed_domain`, and the CLI commands.**
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/space -q`
 Expected: PASS.
 
-- [ ] **Step 5: Confirm the candidate model names exist**
+- [x] **Step 5: Confirm the candidate model names exist**
 
 Run: `uv run python -c "import open_clip; print([p for p in open_clip.list_pretrained() if 'SigLIP2' in p[0] or p[0]=='ViT-B-32'])"`
 Expected: both candidates appear. If `ViT-B-16-SigLIP2` is missing, use the closest SigLIP listed and note that in `space.md`.
 
-- [ ] **Step 6: Embed the clothes with both candidates and score them**
+- [x] **Step 6: Embed the clothes with both candidates and score them**
 
 Run: `uv run amber embed --model <cand> --pretrained <tag> --domain clothes && uv run amber eval-space --model <cand> --pretrained <tag>`, once per candidate.
 
 Record in `docs/results/space.md`: model, P@20, embedding time, and vector dimension. The winner is the one with the higher P@20, with an art spot-check as the tie-breaker (`amber search-text "a stormy seascape"` against art).
 
-- [ ] **Step 7: Set the winner and embed art**
+- [x] **Step 7: Set the winner and embed art**
 
 Set the winner in `config.py`, then run `uv run amber embed --domain art`. Check `uv run amber search-text "red floral dress"` and look at `data/contact_sheet.jpg`.
 Expected: mostly red floral dresses.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/amber tests docs/results/space.md
