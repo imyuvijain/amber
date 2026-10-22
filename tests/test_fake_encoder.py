@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from conftest import FakeEncoder
+from conftest import FakeEncoder, build_fixture_data
 
 
 def _thumb(data_dir, domain, colour):
@@ -50,6 +50,17 @@ def test_fake_encoder_text_is_stable_across_instances_and_distinct_per_text(
     assert not np.allclose(
         fake_encoder.embed_texts(["hello"])[0], fake_encoder.embed_texts(["goodbye"])[0]
     )
+
+
+def test_fake_encoder_image_noise_ignores_data_dir_location(
+    fake_encoder, fixture_data, tmp_path
+):
+    # noise is seeded from the domain-relative path, so the same thumbnail gives the same
+    # vector wherever the data dir lives (tmp_path differs on every pytest run)
+    other_root = build_fixture_data(tmp_path / "elsewhere" / "data")
+    a = fake_encoder.embed_images([_thumb(fixture_data, "clothes", "Red")])
+    b = fake_encoder.embed_images([_thumb(other_root, "clothes", "Red")])
+    assert np.array_equal(a, b)
 
 
 def test_fake_encoder_is_stable_across_processes(fixture_data):
