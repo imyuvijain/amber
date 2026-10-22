@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 KEEP_ART_TYPES = ("Painting", "Photograph", "Print", "Drawing and Watercolor")
 AIC_HEADERS = {"AIC-User-Agent": "amber (https://github.com/imyuvijain/amber)"}
+# www.artic.edu's Cloudflare answers 403 to the default `python-httpx/x.y` User-Agent (and
+# to an empty one) even with AIC_HEADERS; an identifying UA plus AIC_HEADERS passes
+USER_AGENT = "amber/0.1 (https://github.com/imyuvijain/amber)"
 
 SEARCH_URL = "https://api.artic.edu/api/v1/artworks/search"
 IMAGE_URL = "https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg"
@@ -41,10 +44,12 @@ MAX_PAGES = 100  # the API answers 403 ("Invalid number of results") past 10,000
 ART_THUMB_SIDE = 384  # longest side in pixels; the aspect ratio is kept
 
 REQUEST_TIMEOUT = 30.0  # seconds; the IIIF server can be slow, httpx's default is 5
+MAX_CONSECUTIVE_FAILURES = 25  # unusable images in a row before the run is aborted
 ATTEMPTS = 3  # per request, for 429 / 5xx / connection errors
 RETRY_BACKOFF = 5  # before attempt k+1 wait min_interval * RETRY_BACKOFF * k
 
 COLUMNS = ["id", "title", "artist", "date", "artwork_type"]
+_HEADERS = {**AIC_HEADERS, "User-Agent": USER_AGENT}
 
 
 def _search_body(page: int) -> dict:
@@ -67,7 +72,7 @@ def _search_body(page: int) -> dict:
 
 
 class _Fetcher:
-    """Sends requests with `AIC_HEADERS`, spaced `min_interval` apart, retrying hiccups."""
+    """Sends requests with `AIC_HEADERS` + `USER_AGENT`, `min_interval` apart, retrying."""
 
     def __init__(self, client: httpx.Client, min_interval: float) -> None:
         self.client = client
@@ -89,9 +94,7 @@ class _Fetcher:
         for attempt in range(1, ATTEMPTS + 1):
             self._throttle()
             try:
-                response = self.client.request(
-                    method, url, headers=AIC_HEADERS, **kwargs
-                )
+                response = self.client.request(method, url, headers=_HEADERS, **kwargs)
             except httpx.TransportError:
                 if attempt == ATTEMPTS:
                     raise
@@ -149,10 +152,12 @@ def ingest_art(
     Collects `n` public-domain artworks of the `KEEP_ART_TYPES` that have a saved
     thumbnail, paging through the search results; an image that fails (404, server
     error, undecodable) is logged and skipped and the next result takes its place. Stops
-    early when the results run out. `client` is an `httpx.Client` to send through (tests
-    pass a mock one); by default one is created and closed here. The returned/written
-    table also keeps rows from a previous run's parquet, de-duplicated by `id`. If the run
-    is interrupted (a persistent network error, Ctrl-C), the rows collected so far are
+    early when the results run out, and aborts with a RuntimeError after
+    `MAX_CONSECUTIVE_FAILURES` unusable images in a row (something systematic is wrong).
+    `client` is an `httpx.Client` to send through (tests pass a mock one); by default one
+    is created and closed here. The returned/written table also keeps rows from a
+    previous run's parquet, de-duplicated by `id`. If the run is interrupted (a
+    persistent network error, Ctrl-C, the abort above), the rows collected so far are
     saved before the exception propagates.
     """
     if n < 1:
@@ -169,6 +174,7 @@ def ingest_art(
     records: list[dict] = []
     seen: set[int] = set()
     skipped = 0
+    failures_in_a_row = 0
     try:
         for artwork in _search_results(fetcher):
             try:
@@ -193,10 +199,18 @@ def ingest_art(
                     thumb = _download_thumbnail(fetcher, image_id)
                 except httpx.TransportError:
                     raise  # the network is down: stop (rows so far are saved), don't skip on
-                except Exception as exc:  # noqa: BLE001 - HTTP status, PIL errors: skip the item
+                except Exception as exc:  # HTTP status, PIL errors: skip the item
                     logger.warning("skipping a:%d, image not usable: %s", art_id, exc)
                     skipped += 1
+                    failures_in_a_row += 1
+                    if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
+                        # e.g. every image answers 403: don't walk all 10,000 results
+                        raise RuntimeError(
+                            f"{failures_in_a_row} images in a row could not be fetched; "
+                            f"last: {exc}"
+                        ) from exc
                     continue
+                failures_in_a_row = 0
                 save_thumbnail(thumb, dest)
             records.append(
                 {
