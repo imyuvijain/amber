@@ -2,86 +2,93 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A local web app that builds five versions of you in one vector space, four of which never see your clothing choices. They then compete to predict which clothes you'll pick.
+**Goal:** A local web app that answers one question: **can your taste in art predict what you'd wear?** Four versions of you live in one vector space. Three of them never see a clothing choice. Every clothing pick you make is a test they all predict in advance. About 4 minutes, tap-only, no typing.
 
-**Architecture:** A pretrained image-and-text model (CLIP family, via `open_clip`) embeds ~41k clothing photos, ~2k public-domain artworks, and free text into one shared space. Each "You" is a unit direction in that space. It predicts a this-or-that pair by asking which item points further along it. A Bayesian preference model (online probit with active learning) learns from choices. A FastAPI backend with SQLite serves a Vite + React frontend.
+**Architecture:** A pretrained image-and-text model (CLIP ViT-B-32 via `open_clip`) embeds ~41k clothing photos, ~2k public-domain artworks and short text into one shared space. Each "You" is a unit direction in that space and predicts a this-or-that pair by which item points further along it. An online Bayesian probit model learns from choices. FastAPI + SQLite serve a Vite + React frontend. No LLM anywhere.
 
 **Tech Stack:**
-- **Python 3.12 via `uv`:** PyTorch (Apple GPU, "MPS"), `open_clip_torch`, Hugging Face `datasets` (streaming), numpy, pandas, FastAPI, SQLite (stdlib), Typer, httpx, pytest, ruff
+- **Python 3.12 via `uv`:** PyTorch (MPS), `open_clip_torch`, Hugging Face `datasets` (streaming), numpy, pandas, scipy, FastAPI, SQLite (stdlib), Typer, httpx, pytest, ruff
 - **Web:** Vite + React + TypeScript
-- **Optional:** Claude API, used only by the values-you
 
-**Spec:** [NOTES.md](NOTES.md) (decisions, open questions, references)
+**Spec:** [NOTES.md](NOTES.md) (decisions, the research behind them, references)
 
 ---
+
+## Redesign of 2026-10-22 (read this first)
+
+Tasks 1–13 were built against the first design. The rest of the plan was rewritten after a research pass (sources in NOTES.md). What changed:
+
+| Before | Now | Why |
+|---|---|---|
+| Five yous | Four: `stated`, `bigfive`, `art`, `revealed` | Values needed written answers and an LLM; cut for zero friction and a sharper story |
+| Free-text "describe your style" | Tap 3–5 style words from a fixed list | No typing, anywhere |
+| IPIP-50 (50 items) | Mini-IPIP (20 items, Donnellan et al. 2006, public domain) | α ≈ .73–.82 at 40% of the length; Big Five barely predicts clothes, so precision beyond that buys nothing |
+| Hand-written Big Five bridge adjectives | Saucier (1994) Mini-Markers adjectives per trait pole | Published, validated trait adjectives instead of invented ones |
+| 30 art pairs | 20 art pairs | Session budget |
+| 40 active training pairs, then 20 random showdown pairs | **40 random clothing pairs, every one scored** | The non-clothing yous are frozen before any clothes are shown, so every clothing pick is a fair test of them. Revealed is scored *prequentially*: before each pair it predicts from the picks so far, then learns. Twice the scoring data in less time, plus a learning curve. Active selection only bought ≈ +0.02 (docs/results/bench.md) |
+| `accuracy / ceiling` | `(accuracy − 0.5) / (ceiling − 0.5)` | Chance-corrected: a coin flip is 0%, your own retest consistency is 100% |
+| Retest of 10 pairs | Retest of 20 of the 40 pairs | 10 pairs is too noisy for a ceiling |
+
+**Session (≈ 4 min):** sections (5 s) → style words (15 s) → Mini-IPIP (≈ 60 s) → art × 20 (≈ 50 s) → clothes × 40 (≈ 100 s) → results.
 
 ## Roadmap at a glance
 
 | Phase | Tasks | When it's done, you can… |
 |---|---|---|
-| 1. The vector space | 1–5 | type "red floral dress" in the terminal and get the right clothes back |
-| 2. Revealed you | 6–8 | watch a simulated person get learned in 40 choices, and see active learning beat random pairs |
-| 3. First playable | 9–12 | play this-or-that in the browser and see Revealed you vs. Stated you scored |
-| 4. Personality yous | 13–15 | add art taste, Big Five and values, so all five yous compete in the showdown |
-| 5. Results | 16–18 | see the scoreboard, a map of your yous, the "you said / you pick" readout, and a retest a week later |
-| 6. Search | 19 | search "black jacket" and see generic vs. for-you results side by side |
-| 7. Ship | 20 | have a README with your real results and a demo GIF on GitHub |
+| 1. The vector space | 1–5 ✅ | type "red floral dress" in the terminal and get the right clothes back |
+| 2. Revealed you | 6–8 ✅ | watch a simulated person get learned, and see active vs. random pairs |
+| 3. First playable | 9–12 ✅ | play this-or-that in the browser |
+| 4. The redesign | 13 ✅, 14–16 | play the 4-minute tap-only flow with all four yous scored on every clothing pick |
+| 5. Results | 17–19 | see the learning curve, the map of your yous, the readout, and a retest a week later |
+| 6. Search | 20 | search "black jacket" ranked by your art taste |
+| 7. Ship | 21 | have a README with your real results and a demo GIF |
 
-**Later, not in this plan:**
-- friends mode (multi-user, with an "average person" baseline)
-- more domains (music, rooms)
-- a population-trained arm
-- the research paper
+## The four yous
 
-## The five yous
-
-| You | Built from | Sees clothing choices? |
-|---|---|---|
-| `stated` | your own words describing your style | no |
-| `bigfive` | 50-question IPIP personality test, bridged to clothes through fixed text prompts | no |
-| `art` | this-or-that on paintings and photographs, learned in art space, carried over to clothes | no |
-| `values` | open answers about how you live, condensed to personality adjectives by Claude (no clothing words allowed) | no |
-| `revealed` | 40 this-or-that clothing choices | yes, training phase only |
+| You | Built from | Sees clothing choices? | Role in the story |
+|---|---|---|---|
+| `stated` | 3–5 style words you tap | no | what you *say* you like |
+| `bigfive` | Mini-IPIP (20 taps), bridged to clothes through Mini-Markers adjectives | no | what personality alone predicts |
+| `art` | 20 this-or-that picks on paintings and photographs, carried over to clothes | no | **the headline** |
+| `revealed` | your clothing picks so far (prequential) | yes, only picks *before* the one it predicts | the in-domain reference |
 
 ## Global Constraints
 
-- **Disk:** everything under `data/` stays ≤ 1 GB. No dataset is downloaded whole. Clothes are streamed from Hugging Face `benitomartin/fashion-product-images-small-384x512`, and art comes from the Art Institute of Chicago (AIC) API.
-- **Runtime:** Python 3.12 pinned with `uv` (the system Python 3.14 is too new for some ML wheels). It runs locally on Apple Silicon with MPS and falls back to CPU.
-- **Leak rule:** the `stated`, `bigfive`, `art` and `values` builders never receive clothing choices. Each raises `ValueError` if handed one.
-- **Showdown rules:**
-  - Pairs are drawn at random, not chosen by a model.
-  - Every You's prediction is saved *before* the answer is accepted.
-  - All Yous are frozen when the showdown starts.
-  - Showdown and retest choices never train anything.
-- **Frozen inputs:** the Big Five bridge prompts, the concept list, the values questions and the banned-word list are versioned files. They're frozen with git tag `prereg-v1` before the first real showdown.
+- **Disk:** everything under `data/` stays ≤ 1 GB. No dataset is downloaded whole.
+- **Runtime:** Python 3.12 pinned with `uv`. Runs locally on Apple Silicon with MPS and falls back to CPU.
+- **No typing for the player:** every input is a tap. No free-text fields anywhere in the web flow.
+- **No LLM, no paid API, no secrets.**
+- **Leak rule:** the `stated`, `bigfive` and `art` builders never receive clothing choices. Each raises `ValueError` if handed one.
+- **Scoring rules:**
+  - Clothing pairs are drawn at random (never chosen by a model), from the person's allowed sections, never repeating an item.
+  - `stated`, `bigfive` and `art` are frozen right before the first clothing pair is created.
+  - Before each clothing pair is returned, every You's `P(a)` is saved. Revealed's comes from a model replayed on that person's *earlier* clothing picks only (it abstains, `P(a) = 0.5`, under 5 picks).
+  - An answer is rejected if any prediction is missing (already enforced by `MissingPredictions`).
+  - Retest choices never train anything.
+- **Frozen inputs:** the style-word list, the Mini-IPIP items, the Mini-Markers bridge file, the banned-word list and the readout concept list are versioned files, frozen with git tag `prereg-v1` before the first real run.
 - **Seeds:** `SEED = 7` wherever randomness affects results.
-- **Secrets:** no secrets in git. `ANTHROPIC_API_KEY` is read from the environment only. Without it, `values` abstains (predicts 0.5) instead of failing.
-- **Fast tests:** the default `pytest` run uses `FakeEncoder` and a generated fixture catalog. Real-model tests are marked `@pytest.mark.slow` and are excluded by default.
+- **Fast tests:** the default `pytest` run uses `FakeEncoder` and a generated fixture catalog. Real-model tests are `@pytest.mark.slow` and excluded by default.
 - **AIC etiquette:** every AIC request sends `AIC-User-Agent: amber (https://github.com/imyuvijain/amber)` and stays at or under 1 request per second.
 - **Small commits (the user wants many):** split every task's "Commit" step into several commits, in this order:
   - `build:` or `chore:` for dependency and tooling changes
   - `test(<area>):` for the failing tests
-  - `feat(<area>):` for each function or module that turns them green, one per function or module
+  - `feat(<area>):` / `refactor(<area>):` for each function or module that turns them green, one per function or module
   - `feat(cli):` or `feat(api):` for the wiring
   - `docs(results):` for measured results
   - one `feat(web):` commit per screen or component
 
   Messages describe what changed, and each one ends with the `Co-Authored-By` line. Run `git push origin main` after every finished task.
 - **Item ids:** clothes are `"c:<n>"` and art is `"a:<n>"`. Thumbnails live at `data/<domain>/thumbs/<n>.jpg`.
-- **Licenses:** AIC public-domain images are CC0. The clothing dataset's license is unstated on Hugging Face (it comes from Kaggle's *Fashion Product Images* by Param Aggarwal). Check the license before posting product images publicly beyond small README screenshots.
+- **Licenses:** AIC public-domain images are CC0. IPIP items are public domain. The clothing dataset's license is unverified (Kaggle *Fashion Product Images*, Param Aggarwal); check it before any public hosting.
 
 ## Review Focus
 
-1. **Random or inconsistent clicking:** the model must never produce NaN or crash, and a random clicker's held-out accuracy should sit near 50%. *(Task 6: `test_no_nan_after_many_random_updates`. Task 7: `test_random_clicker_is_near_chance`.)*
-2. **Near-identical pairs:** two near-identical photos must never be shown as a pair (cosine > 0.95 on full embeddings). *(Task 7: `test_choose_pair_skips_near_duplicates`.)*
-3. **Closing the tab mid-flow or double-clicking:**
-   - the open pair resumes
-   - a repeated identical answer is a no-op
-   - a conflicting second answer is rejected
-
-   *(Task 8: `test_answer_is_idempotent`, `test_conflicting_answer_rejected`, `test_open_pair_resumes`. Task 12: buttons disabled while a request is in flight.)*
-4. **Broken or missing images:** they're skipped at ingest and never served. *(Task 2: `test_ingest_skips_corrupt_image`. Task 11: `test_every_served_item_has_thumbnail`.)*
-5. **Items outside your chosen sections:** if you pick menswear, you never get dresses, in pairs or in search. *(Task 11: `test_pairs_respect_filters`. Task 19: `test_search_respects_allowed`.)*
+1. **Random or inconsistent clicking:** the model never produces NaN or crashes, and a random clicker sits near 50%. *(Tasks 6–7.)*
+2. **Near-identical pairs:** two near-identical photos are never shown together (cosine > 0.95). *(Task 7.)*
+3. **Closing the tab mid-flow or double-clicking:** the open pair resumes, a repeated identical answer is a no-op, a conflicting second answer is rejected. *(Task 8; Task 12 disables buttons in flight.)*
+4. **Broken or missing images:** skipped at ingest, never served. *(Tasks 2, 11.)*
+5. **Items outside your chosen sections:** never shown, in pairs or in search. *(Tasks 11, 20.)*
+6. **No peeking:** a prediction for clothing pair *k* never depends on pick *k* or later. *(Task 14: `test_revealed_prediction_uses_only_earlier_picks`.)*
 
 ---
 
@@ -89,18 +96,18 @@
 
 ### Vector space
 
-- **Encoder:** CLIP-family model. The winner is chosen by measurement in Task 5 between `("ViT-B-16-SigLIP2", "webli")` and `("ViT-B-32", "laion2b_s34b_b79k")`. All vectors are L2-normalized, `float32`.
+- **Encoder:** `("ViT-B-32", "laion2b_s34b_b79k")`, chosen in Task 5 (docs/results/space.md). All vectors L2-normalized `float32`.
 - **Centered item vectors:** `centered(x) = normalize(x − domain_mean)`. Centering removes "clothing-ness" and "art-ness", so a taste direction learned on art can point somewhere meaningful among clothes.
-- **Learning basis:** each domain gets a PCA basis (`PCA_DIM = 32`) fit on that domain's centered vectors. Preference models learn in 32 dimensions, which is what makes 30–40 choices enough.
-- **Every You is a unit vector `w`** in full-dimensional space. Its score for an item is `w · centered(item)`, and it predicts a pair by which score is higher.
-  - Learned yous lift their 32-dimensional weights back to full dimension with `basis.lift`.
-  - Text yous use `text_direction(texts) = normalize(mean(embed_texts(texts)) − embed_texts([NEUTRAL_PROMPT]))`, which cancels the gap between text and image regions of the space.
+- **Learning basis:** each domain gets a PCA basis (`PCA_DIM = 32`) fit on its centered vectors. Preference models learn in 32 dimensions.
+- **Every You is a unit vector `w`** in full-dimensional space. Its score for an item is `w · centered(item)`; it predicts a pair by which score is higher.
+  - Learned yous lift their 32-dimensional weights back with `basis.lift`.
+  - Text yous use `text_direction(texts) = normalize(mean(embed_texts(texts)) − embed_texts([NEUTRAL_PROMPT]))`.
 
 ### Flow in the app
 
-Welcome → describe your style → pick sections → Big Five (skippable) → values (skippable) → art this-or-that (30) → clothes this-or-that (40) → showdown (20) → results → search. The retest of 10 showdown pairs unlocks 7 days later.
+Welcome → sections → style words → Mini-IPIP (skippable) → art this-or-that (20, active) → clothes this-or-that (40, random, all scored) → results → search. The retest of 20 of the clothing pairs unlocks 7 days later.
 
-Personality inputs come *before* any clothing is shown, so clothes can't color them.
+Personality and art inputs come *before* any clothing is shown, so clothes can't color them.
 
 ### Package layout
 
@@ -122,8 +129,8 @@ src/amber/
   prefs/simulate.py    SimulatedUser, run_benchmark
   yous/base.py         You, YouName, text_direction, predict
   yous/registry.py     BUILDERS, build_all_yous
-  yous/stated.py  yous/revealed.py  yous/art_taste.py  yous/bigfive.py  yous/values.py
-  yous/files/          ipip50.yaml, bigfive_bridge.yaml, values_questions.yaml, banned_words.txt
+  yous/stated.py  yous/revealed.py  yous/art_taste.py  yous/bigfive.py
+  yous/files/          style_words.yaml, mini_ipip.yaml, bigfive_bridge.yaml, banned_words.txt
   eval/metrics.py      Score, score_showdown, self_consistency, normalized_accuracy
   eval/retest.py       retest_due, next_retest_pair
   explain/readout.py   concepts.yaml, concept_alignment, label_lift, build_readout
@@ -1063,367 +1070,229 @@ Expected: PASS.
 git add src/amber tests web
 git commit -m "feat: art-you — taste learned on art, carried over to clothes"
 ```
+---
 
-### Task 14: Big Five you
+## Phase 4: The redesign
+
+Tasks 14–16 turn the first-design app (train → showdown, free-text description) into the tap-only, every-pick-scored flow. Existing tests that encode the old flow are **updated or deleted in the same commit as the change that obsoletes them**, never left failing or skipped. Task 13's pending browser check is folded into Task 14 step 5.
+
+### Task 14: One scored clothing phase with a prequential revealed you
 
 **Files:**
-- Create: `src/amber/yous/bigfive.py`, `src/amber/yous/files/ipip50.yaml`, `src/amber/yous/files/bigfive_bridge.yaml`, `src/amber/yous/files/banned_words.txt`, `tests/yous/test_bigfive.py`, `web/src/screens/Quiz.tsx`
-- Modify: `src/amber/yous/base.py` (add `load_banned_words() -> set[str]`, which reads `banned_words.txt` as one lowercase word per line), `src/amber/yous/registry.py` (register `bigfive`), `src/amber/api/app.py` (`GET /api/ipip` → items, and `PUT /api/users/{uid}/ipip` with `{answers: {item_id: 1..5}}`), `web/src/App.tsx`
+- Modify: `src/amber/config.py`, `src/amber/context.py`, `src/amber/yous/base.py`, `tests/store/`, `src/amber/flow.py`, `src/amber/yous/revealed.py`, `src/amber/yous/registry.py`, `src/amber/eval/metrics.py`, `src/amber/api/app.py`, `tests/test_flow.py`, `tests/yous/test_revealed.py`, `tests/eval/test_metrics.py`, `tests/api/test_flow_api.py`, `tests/conftest.py` (`play_train` → `play_clothes`), `web/src/steps.ts`, `web/src/App.tsx`, `web/src/screens/Showdown.tsx` (becomes the only clothes screen), `web/src/screens/Scoreboard.tsx`
+- Delete: the clothes `train` step from the web flow
 
 **Interfaces:**
-- Produces:
-  - `@dataclass(frozen=True) class IpipItem: id: str; text: str; trait: Literal["O", "C", "E", "A", "N"]; keyed: Literal[1, -1]`
-  - `load_ipip() -> list[IpipItem]`
-    - the 50 IPIP Big-Five Factor Markers, which are public domain
-    - copy them verbatim from ipip.ori.org, 10 per trait, with their published +/− keys
-  - `score_ipip(answers: dict[str, int]) -> dict[str, float]`
-    - reverse-keyed items become `6 − x`
-    - each trait is `(mean − 3) / 2`, in the range [−1, 1]
-    - a trait with fewer than 5 answered items is omitted
-  - `build_bigfive(conn, user_id, ctx) -> You`
-    - computes `w = normalize(Σ_trait score · (text_direction(high_prompts) − text_direction(low_prompts)))`
-    - no scored traits, or a zero vector, means abstain
-    - `meta={"scores": {...}}`
-- `bigfive_bridge.yaml`: for each trait, 3 `high` and 3 `low` prompts in the form `"clothing for a person who is <adjectives>"`. The adjectives must describe personality only and never name garments, colors or styles.
+- `Settings` becomes `Settings(art_train_pairs: int, clothes_pairs: int, retest_pairs: int, retest_min_days: int)`, `DEFAULT_SETTINGS = Settings(20, 40, 20, 7)`.
+- Phases: art uses `train` only; clothes uses `showdown` (the 40 scored picks) and, later, `retest`. Clothes `train` is gone: `next_pair(..., "clothes", "train", ...)` raises `ValueError`.
+- Values is cut: drop `"values"` from `YouName` and `YOU_ORDER` in `yous/base.py` (now `("stated", "bigfive", "art", "revealed")`) and the `llm` field from `AppContext`; fix the store tests that use `"values"` as an example name.
+- `FROZEN_YOUS: tuple[YouName, ...] = ("stated", "bigfive", "art")` in `registry.py`; `build_frozen_yous(conn, user_id, ctx) -> dict[str, You]` builds only those registered in `BUILDERS` (so it works before `bigfive` lands). `build_all_yous` stays for the readout.
+- `revealed.py`:
+  - `revealed_p_a(conn, user_id, pair: Choice, ctx) -> float`: `P(a)` from a `PreferenceModel` replayed on the user's clothes `showdown` choices **answered before `pair` was created** (ordered by answer time, excluding `pair` itself). Returns exactly `0.5` under `MIN_CHOICES` (5) such choices. Uses `model.p_prefer` on the basis projections of `centered(a)` and `centered(b)`.
+  - `build_revealed` learns from all answered clothes `showdown` choices (used by readout, map and search after the run).
+- `flow.next_pair` for clothes `showdown`:
+  - first call: `_freeze_yous` with `build_frozen_yous`
+  - draws `random_pair` from allowed, unseen items
+  - saves predictions for every frozen You **plus** `revealed` (from `revealed_p_a`) before returning the pair
+  - resuming an open pair repairs missing predictions as today
+- `eval/metrics.py`:
+  - `score_showdown` unchanged in contract; add `window: tuple[int, int] | None = None` (1-based inclusive pair positions by creation order) so results can show "all 40" and "picks 21–40"
+  - `learning_curve(choices, predictions, you: str, size: int = 10) -> list[float]`: rolling-window accuracy per pair position (credit as in `score_showdown`), shorter at the start
+- API:
+  - `POST /next` no longer requires a clothes train phase; clothes `showdown` requires the art train phase to be done (409 otherwise).
+  - `/choose` `reveal` covers all four yous (abstainers omitted, as now).
+  - `GET /results` returns `{scores_all, scores_late, curves: {you: [float]}, n_clothes}`.
+- Web: steps become `welcome → sections → describe → art → clothes → results` (describe is replaced in Task 15, the quiz inserted in Task 16). The clothes screen shows a running tally per You after each pick. The scoreboard shows `scores_all` with the late-window number beside it.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_ipip_has_50_items_10_per_trait():
-    items = load_ipip(); assert len(items) == 50 and Counter(i.trait for i in items) == {t: 10 for t in "OCEAN"}
+def test_clothes_train_phase_is_gone(ctx, user):
+    with pytest.raises(ValueError): next_pair(ctx.conn, user, "clothes", "train", ctx)
 
-def test_reverse_keying():
-    plus, minus = first_plus_and_minus_item("E")
-    assert score_ipip({plus.id: 5, minus.id: 1} | fill("E", 3))["E"] > 0
+def test_frozen_before_first_clothes_pair(ctx, user):
+    play_art(ctx, user, n=ctx.settings.art_train_pairs)
+    p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
+    assert set(load_yous(ctx.conn, user)) == set(FROZEN_YOUS) & set(BUILDERS)
+    assert set(get_predictions(ctx.conn, p.pair_id)) == (set(FROZEN_YOUS) & set(BUILDERS)) | {"revealed"}
 
-def test_trait_omitted_when_under_5_answers(): assert "O" not in score_ipip(four_answers_for("O"))
+def test_revealed_abstains_for_first_five_pairs(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=6)
+    assert [get_predictions(ctx.conn, c.pair_id)["revealed"] for c in choices[:5]] == [0.5] * 5
 
-def test_bridge_prompts_name_no_clothing_words():
-    banned = load_banned_words()
-    for prompt in all_bridge_prompts(): assert not banned & set(adjectives_part(prompt).lower().split())
+def test_revealed_prediction_uses_only_earlier_picks(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=8)
+    p7 = get_predictions(ctx.conn, choices[7].pair_id)["revealed"]
+    assert p7 == pytest.approx(revealed_p_a_from(choices[:7], choices[7], ctx))  # replay helper in tests/fakes.py
 
-def test_bigfive_abstains_without_answers(ctx, user): assert build_bigfive(ctx.conn, user, ctx).w is None
+def test_revealed_learns_red(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=ctx.settings.clothes_pairs)
+    late = score_showdown(choices, preds(ctx, choices), window=(21, 40))
+    assert next(s for s in late if s.you == "revealed").accuracy > 0.7
+
+def test_learning_curve_length_and_bounds(): ...
+def test_score_window_selects_positions(): ...
+def test_results_route_shape(client, finished_user): ...
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [ ] **Step 2: Run the tests and confirm they fail.** `uv run pytest -q` — new tests FAIL; then update or delete each old-flow test the change obsoletes (list them in the commit message).
+- [ ] **Step 3: Implement** config, registry, revealed, flow, metrics, API, then the web changes.
+- [ ] **Step 4: Run the tests and confirm they pass.** `uv run pytest -q && npm --prefix web run build`
+- [ ] **Step 5: Browser check** (start both servers with `preview_start`): sections → describe → 20 art picks → 40 clothes picks with a live tally → results with four rows possible (stated, art, revealed now; bigfive after Task 16). Reload mid-pair resumes; a fast double-click records one answer. Screenshot the results.
+- [ ] **Step 6: Commit** in small commits (see Global Constraints), push.
 
-Run: `uv run pytest tests/yous/test_bigfive.py -q`
-Expected: FAIL.
-
-- [ ] **Step 3: Write the YAML files and `banned_words.txt`** (garment names, colors, fabrics, style words, about 150 entries). **Then implement `bigfive.py`, the routes, and the Quiz screen** as a 5-point scale, one item per row, with a Skip button.
-
-- [ ] **Step 4: Run the tests and confirm they pass, then do a browser check** of the quiz to the showdown to a `bigfive` row on the scoreboard.
-
-Run: `uv run pytest -q`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/amber tests web
-git commit -m "feat: Big Five you via IPIP-50 and fixed text bridges"
-```
-
-### Task 15: Values you, then freeze the inputs
+### Task 15: Stated you from tapped style words
 
 **Files:**
-- Create: `src/amber/yous/values.py`, `src/amber/yous/files/values_questions.yaml`, `tests/yous/test_values.py`, `web/src/screens/Values.tsx`
-- Modify: `src/amber/yous/registry.py` (register `values`), `src/amber/context.py` (build `llm` from `ANTHROPIC_API_KEY` if set and the `anthropic` package is importable), `src/amber/api/app.py` (`GET /api/values/questions`, `PUT /api/users/{uid}/values`), `web/src/App.tsx`
+- Create: `src/amber/yous/files/style_words.yaml`, `web/src/screens/StyleWords.tsx`
+- Modify: `src/amber/yous/stated.py`, `src/amber/api/app.py`, `tests/yous/test_stated.py`, `tests/api/test_flow_api.py`, `web/src/steps.ts`, `web/src/App.tsx`
+- Delete: `web/src/screens/Describe.tsx`, `Describe.css`, and the `PUT /describe` route with its tests
 
 **Interfaces:**
-- Produces:
-  - `load_questions() -> list[dict]`: 6 questions about how you live, decide and spend a free Saturday. None mention clothes, shopping or appearance.
-  - `extract_traits(answers: dict[str, str], llm) -> list[str]`
-    - asks Claude for 8–12 lowercase personality adjectives as a JSON list
-    - if any adjective is in `banned_words.txt`, it retries once with the offenders named, then drops whatever is still banned
-    - it raises `ValueError` if fewer than 4 remain
-  - `build_values(conn, user_id, ctx) -> You`
-    - computes `w = text_direction(encoder, [f"clothing for a person who is {t}" for t in traits])`
-    - `meta={"traits": traits}`
-    - with no `ctx.llm`, it abstains with `meta={"reason": "no API key"}`
-    - with no answers, it abstains with `meta={"reason": "no answers"}`
-- Before writing the Claude call, **invoke the `claude-api` skill** for the current SDK usage, and default to model `claude-haiku-5-5`. The user sets `ANTHROPIC_API_KEY` themselves.
+- `style_words.yaml`: 30 single words or two-word phrases a person would use for their own style, grouped for display into 5 rows of 6 (e.g. *minimal, classic, edgy, sporty, bohemian, preppy, streetwear, vintage, elegant, relaxed, bold, earthy, monochrome, colorful, romantic, utilitarian, …*). No brand names. Frozen with `prereg-v1`.
+- `load_style_words() -> list[str]`
+- `PUT /api/users/{uid}/style {words: [str]}`: 1–5 words, each in the list (422 otherwise). Stored as `save_answer(conn, uid, "stated", "words", json.dumps(words))`.
+- `GET /api/style-words` → `{rows: [[str]]}`
+- `build_stated`: abstains with `{"reason": "no words"}` when none; else `w = text_direction(encoder, [f"a photo of {word} clothing" for word in words])`, `meta={"words": words}`. Still never receives clothing choices.
+- StyleWords screen: chips, tap to toggle, counter "3 of up to 5", Continue enabled at ≥ 1.
 
-- [ ] **Step 1: Write the failing tests** (with a fake LLM object; no network)
+- [ ] **Step 1: Write the failing tests** (abstains with no words; red-word direction prefers the red item via `red_and_blue_centered`; route rejects 0, 6, and unknown words; leak rule still raises).
+- [ ] **Step 2: Confirm they fail.** `uv run pytest tests/yous/test_stated.py tests/api -q`
+- [ ] **Step 3: Implement**, replace the Describe step with StyleWords in `steps.ts`, delete Describe and its route.
+- [ ] **Step 4: Confirm pass.** `uv run pytest -q && npm --prefix web run build`; browser-check the chips screen.
+- [ ] **Step 5: Commit** in small commits, push.
 
-```python
-def test_extract_traits_filters_banned_and_retries():
-    llm = FakeLLM(['["curious","denim","calm","bold","warm","shy"]', '["curious","calm","bold","warm","shy","steady"]'])
-    assert "denim" not in extract_traits(ANSWERS, llm) and llm.calls == 2
+### Task 16: Big Five you (Mini-IPIP + Mini-Markers bridge), then freeze the inputs
 
-def test_extract_traits_raises_when_too_few(): ... pytest.raises(ValueError)
-def test_values_abstains_without_key(ctx, user): assert build_values(ctx.conn, user, ctx).meta["reason"] == "no API key"
-def test_questions_never_mention_clothes():
-    banned = load_banned_words() | {"clothes", "clothing", "shopping", "outfit", "wear", "fashion", "style"}
-    for q in load_questions(): assert not banned & set(q["text"].lower().split())
-```
+**Files:**
+- Create: `src/amber/yous/bigfive.py`, `src/amber/yous/files/mini_ipip.yaml`, `src/amber/yous/files/bigfive_bridge.yaml`, `src/amber/yous/files/banned_words.txt`, `tests/yous/test_bigfive.py`, `web/src/screens/Quiz.tsx`
+- Modify: `src/amber/yous/base.py` (`load_banned_words() -> set[str]`), `src/amber/yous/registry.py` (register `bigfive`), `src/amber/api/app.py`, `web/src/steps.ts`, `web/src/App.tsx`
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+**Interfaces:**
+- `mini_ipip.yaml`: the 20 Mini-IPIP items (Donnellan, Oswald, Baird & Lucas, 2006), 4 per trait, with trait and keying. IPIP items are public domain; cite the source in the file header.
+- `@dataclass(frozen=True) class IpipItem: id: str; text: str; trait: Literal["O","C","E","A","N"]; keyed: Literal[1, -1]`
+- `load_ipip() -> list[IpipItem]`; `score_ipip(answers: dict[str, int]) -> dict[str, float]`: per trait, mean of keyed answers (1–5, reverse = 6 − x) mapped to `[-1, 1]` by `(mean − 3) / 2`; a trait with no answers is omitted.
+- `bigfive_bridge.yaml`: per trait, `high` and `low` lists of 4 adjectives taken from Saucier's (1994) Mini-Markers for that pole (e.g. E high: talkative, energetic, bold, extraverted; E low: shy, quiet, bashful, withdrawn). Three prompts per pole: `"clothing worn by someone who is {a}, {b} and {c}"` over rotations of the list. A test asserts no adjective is in `banned_words.txt` (~80 garment, color, fabric and style words).
+- `build_bigfive`: `w = normalize(Σ_t s_t · (text_direction(high_t) − text_direction(low_t)))` over answered traits; abstains with fewer than 10 answered items (`{"reason": "skipped"}`). `meta={"traits": {t: s_t}}`.
+- Routes: `GET /api/ipip` → items; `PUT /api/users/{uid}/ipip {answers: {item_id: 1..5}}`.
+- Quiz screen: one statement at a time, five big tap targets ("Very inaccurate" … "Very accurate"), auto-advance on tap, back button, progress "7 / 20", and "Skip quiz". Inserted after style words.
 
-Run: `uv run pytest tests/yous/test_values.py -q`
-Expected: FAIL.
+- [ ] **Step 1: Write the failing tests** (keying and reverse scoring; trait range; skip → abstain; bridge words never banned; a high-E fake person's `w` has positive cosine with E-high text direction; leak rule).
+- [ ] **Step 2: Confirm they fail.** `uv run pytest tests/yous/test_bigfive.py -q`
+- [ ] **Step 3: Write the YAML files and `banned_words.txt`, then implement** `bigfive.py`, routes, the Quiz screen.
+- [ ] **Step 4: Confirm pass**, then do a timed browser run of the whole flow and check it fits ≈ 4 minutes of tapping (excluding image load); record the time in the commit message.
+- [ ] **Step 5: Freeze the inputs.** Show the user `style_words.yaml`, `mini_ipip.yaml`, `bigfive_bridge.yaml` and `banned_words.txt` for one last review. Then commit and `git tag prereg-v1` (the readout concept list in Task 17 joins as `prereg-v1.1`, noted in its commit).
 
-- [ ] **Step 3: Implement `values.py`, the routes, and the Values screen** (one question at a time, skippable).
-
-- [ ] **Step 4: Run the tests and confirm they pass.** Then do a browser check with the key set: the `values` row appears and `meta.traits` shows in the API results.
-
-Run: `uv run pytest -q`
-Expected: PASS.
-
-- [ ] **Step 5: Freeze the inputs.** Review `bigfive_bridge.yaml`, `values_questions.yaml`, `banned_words.txt` and (from Task 16) `concepts.yaml` one last time with the user.
-
-```bash
-git add src/amber tests web
-git commit -m "feat: values-you via Claude-extracted personality adjectives"
-git tag prereg-v1
-```
-
-**Milestone, all five yous compete:** play the full flow for real for the first time.
+**Milestone, the real experiment:** play the full 4-minute flow for real for the first time.
 
 ---
 
 ## Phase 5: Results
 
-### Task 16: The readout ("you said… you pick…")
+### Task 17: The readout ("you said… you pick…")
 
 **Files:**
 - Create: `src/amber/explain/__init__.py`, `src/amber/explain/readout.py`, `src/amber/explain/concepts.yaml`, `tests/explain/test_readout.py`
 
 **Interfaces:**
-- Produces:
-  - `load_concepts() -> list[str]`: about 120 style concepts, e.g. `minimalist`, `bohemian`, `sporty`, `formal`, `vintage`, `bold colors`, `pastel`, `monochrome`, `graphic print`, `loose fit`, `fitted`, `textured`, `earthy tones`
-  - `concept_alignment(you: You, encoder: Encoder, concepts: list[str]) -> list[tuple[str, float]]`
-    - sorted descending
-    - each concept direction is `text_direction(encoder, [f"{c} clothing"])`
-    - an abstaining You returns `[]`
-  - `label_lift(choices: list[Choice], items: pd.DataFrame, column: str, min_count: int = 3) -> list[tuple[str, float]]`
-    - lift is `(chosen_count + 1) / (shown_count / 2 + 1)` per label value
-    - values with `shown_count < min_count` are dropped
-    - sorted descending
-  - `@dataclass class Readout: said: list[str]; picks: list[str]; surprises: list[str]; sentences: list[str]`
-  - `build_readout(yous: dict[str, You], choices: list[Choice], items: pd.DataFrame, encoder: Encoder) -> Readout`
-    - `said` is the top 2 concepts of `stated`
-    - `picks` is the top 3 concepts of `revealed`
-    - `surprises` are the `said` concepts that rank in the bottom half for `revealed`
-    - `sentences[0] = f"You said {said[0]} and {said[1]}. You keep picking {picks[0]}, {picks[1]} and {picks[2]}."`
-    - more sentences come from `label_lift` on `base_colour`, `article_type` and `usage`, as `f"You pick {value} {lift:.1f}× more than chance."`, for at most 3 sentences
-    - if `stated` abstains, `sentences[0]` is the picks clause only
+- `load_concepts() -> list[str]`: about 120 style concepts (superset of the style words)
+- `concept_alignment(you: You, encoder: Encoder, concepts: list[str]) -> list[tuple[str, float]]`
+- `label_lift(choices: list[Choice], items: pd.DataFrame, column: str, min_count: int = 3) -> list[tuple[str, float]]`
+- `@dataclass class Readout: said: list[str]; picks: list[str]; art_says: list[str]; surprises: list[str]; sentences: list[str]`
+- `build_readout(yous: dict[str, You], choices: list[Choice], items: pd.DataFrame, encoder: Encoder) -> Readout`. `said` = the tapped words; `picks` = top concepts of revealed plus top label lifts; `art_says` = top concepts of the art you ("your art taste says: earthy, textured, muted"); `surprises` = concepts high for revealed but not in `said`.
 
 - [ ] **Step 1: Write the failing tests**
+- [ ] **Step 2: Confirm they fail.** `uv run pytest tests/explain/test_readout.py -q`
+- [ ] **Step 3: Implement and write `concepts.yaml`**, tag `prereg-v1.1`.
+- [ ] **Step 4: Confirm pass.**
+- [ ] **Step 5: Commit** in small commits, push.
 
-```python
-def test_label_lift_ranks_chosen_value_first(): assert label_lift(choices_red_wins, items, "base_colour")[0][0] == "Red"
-def test_label_lift_drops_rare_values(): assert "Teal" not in dict(label_lift(choices, items, "base_colour", min_count=3))
-def test_alignment_empty_for_abstain(fake_encoder): assert concept_alignment(You("stated", None, {}), fake_encoder, ["a"]) == []
-def test_readout_first_sentence_shape(...):
-    r = build_readout(yous, choices, items, fake_encoder)
-    assert r.sentences[0].startswith("You said ") and len(r.picks) == 3
-def test_readout_without_stated(...): assert build_readout(no_stated_yous, ...).sentences[0].startswith("You keep picking")
-```
-
-- [ ] **Step 2: Run the tests and confirm they fail**
-
-Run: `uv run pytest tests/explain/test_readout.py -q`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement it and write `concepts.yaml`** (frozen with `prereg-v1`. If Task 15's tag already exists, re-tag as `prereg-v1.1` and note why in the commit).
-
-- [ ] **Step 4: Run the tests and confirm they pass**
-
-Run: `uv run pytest tests/explain -q`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/amber/explain tests/explain
-git commit -m "feat: readout — stated vs revealed concepts and label lift"
-```
-
-### Task 17: The map of your yous and the full results page
+### Task 18: Results page — learning curve, map of your yous, readout
 
 **Files:**
-- Create: `src/amber/explain/geometry.py`, `tests/explain/test_geometry.py`, `web/src/screens/Results.tsx`, `web/src/components/YouMap.tsx`
-- Modify: `src/amber/api/app.py` (`GET /results` adds `cosines`, `map` and `readout`), `web/src/App.tsx` (Results replaces Scoreboard and contains it)
+- Create: `src/amber/explain/geometry.py`, `tests/explain/test_geometry.py`, `web/src/screens/Results.tsx`, `web/src/components/YouMap.tsx`, `web/src/components/LearningCurve.tsx`
+- Modify: `src/amber/api/app.py` (`/results` adds `cosines`, `map`, `readout`), `web/src/App.tsx` (Results replaces Scoreboard and contains it)
 
 **Interfaces:**
-- Produces:
-  - `you_cosines(yous: dict[str, You]) -> dict[str, dict[str, float]]`: symmetric, over non-abstaining yous only
-  - `map_points(index: VectorIndex, basis2d: Basis, yous: dict[str, You], sample_ids: list[str], top: int = 20) -> dict`
-    - `items` is `[{id, x, y}]`, the `sample_ids` projected
-    - `yous` is `[{name, x, y}]`, each the projection of the mean centered vector of that You's `top` highest-scoring items
-- `/results` adds:
-  - `cosines`
-  - `map` (300 allowed items sampled with `SEED`)
-  - `readout` (`Readout` as a dict)
-- **YouMap:** an SVG scatter of item thumbnails as small dots (hover shows the thumbnail) with five labeled You markers, colored consistently with the scoreboard rows. Run `dataviz` before writing it.
+- `you_cosines(yous: dict[str, You]) -> dict[str, dict[str, float]]`: symmetric, non-abstaining only
+- `map_points(index: VectorIndex, basis2d: Basis, yous: dict[str, You], sample_ids: list[str], top: int = 20) -> dict`: 300 allowed clothing items (sampled with `SEED`) plus 100 art items projected into the **clothes** 2-D basis, and one marker per You
+- Results page order (run the `dataviz` skill before writing charts):
+  1. **Headline sentence:** "Your art taste predicted X of your 40 picks" with its CI, next to coin flip and the other yous
+  2. **Scoreboard:** one row per You, accuracy bar, 95% CI whisker, dashed 50% line
+  3. **Learning curve:** rolling accuracy per pick for all four yous; revealed starts at 50% and climbs, the frozen yous are flat-ish lines
+  4. **Readout sentences**
+  5. **YouMap:** SVG scatter, clothes and art as small dots (hover shows the thumbnail), four labeled You markers, colors consistent with the scoreboard
+  6. **Cosine table**
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing tests** (geometry; `/results` shape)
+- [ ] **Step 2: Confirm they fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Confirm pass**, browser check at desktop and phone widths, screenshot.
+- [ ] **Step 5: Commit** in small commits, push.
 
-```python
-def test_cosines_symmetric_unit_diagonal(): c = you_cosines(yous); assert c["stated"]["revealed"] == c["revealed"]["stated"] and c["art"]["art"] == pytest.approx(1)
-def test_cosines_skip_abstainers(): assert "values" not in you_cosines(yous_with_values_abstaining)
-def test_map_points_shapes(): m = map_points(idx, b2, yous, ids[:10]); assert len(m["items"]) == 10 and {p["name"] for p in m["yous"]} == non_abstaining
-def test_results_api_has_map_and_readout(client_after_full_flow): assert {"cosines", "map", "readout"} <= set(client_after_full_flow.get(...).json())
-```
-
-- [ ] **Step 2: Run the tests and confirm they fail**
-
-Run: `uv run pytest tests/explain/test_geometry.py tests/api -q`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement `geometry.py`, the API additions, and the Results page** (the scoreboard, then the readout sentences, then the map, then a small cosine table).
-
-- [ ] **Step 4: Run the tests and confirm they pass, then do a browser check** of the Results page at desktop and phone widths, and take a screenshot.
-
-Run: `uv run pytest -q`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/amber tests web
-git commit -m "feat: results page — map of your yous, readout, cosines"
-```
-
-### Task 18: The retest a week later (the ceiling)
+### Task 19: The retest a week later (the ceiling)
 
 **Files:**
 - Create: `src/amber/eval/retest.py`, `tests/eval/test_retest.py`
-- Modify: `src/amber/flow.py` (`phase="retest"`), `src/amber/eval/metrics.py` (use the ceiling), `src/amber/api/app.py` (`/results` adds `ceiling`, `normalized`, `retest_due_at`), `web/src/screens/Results.tsx` (a "Come back on <date> for the retest" banner, and a retest button when due)
+- Modify: `src/amber/flow.py` (`phase="retest"`), `src/amber/eval/metrics.py`, `src/amber/api/app.py` (`/results` adds `ceiling`, `normalized`, `retest_due_at`), `web/src/screens/Results.tsx`
 
 **Interfaces:**
-- Produces:
-  - `retest_due(conn, user_id: str, settings: Settings, now: datetime) -> bool`: true when the last showdown answer is at least `retest_min_days` old and the retest isn't finished
-  - `next_retest_pair(conn, user_id: str, settings: Settings, now: datetime) -> Choice | None`
-    - takes the first `retest_pairs` showdown pairs, shuffled with `SEED` and with sides swapped
-    - `retest_of` is set to the original `pair_id`
-  - `self_consistency(original: list[Choice], retest: list[Choice]) -> float | None`: the fraction of retest pairs where you picked the same item; `None` if there's no retest
-  - `normalized_accuracy(accuracy: float, ceiling: float) -> float`, equal to `accuracy / ceiling`
-- `/results` adds `ceiling: float | null`, `normalized: {you: float} | null`, and `retest_due_at: ISO datetime | null`.
+- `retest_due(conn, user_id, settings, now) -> bool`: last clothes pick ≥ `retest_min_days` old and retest unfinished
+- `next_retest_pair(conn, user_id, settings, now) -> Choice | None`: re-shows 20 of the 40 clothing pairs (chosen with `SEED`), sides swapped at random
+- `self_consistency(original, retest) -> float | None`
+- `normalized_accuracy(accuracy, ceiling) -> float | None`: `(accuracy − 0.5) / (ceiling − 0.5)`; `None` when `ceiling ≤ 0.5`
+- Results: a "Come back on <date>" banner, a retest button when due, then a ceiling line on the scoreboard and normalized numbers.
 
 - [ ] **Step 1: Write the failing tests**
-
-```python
-def test_retest_not_due_before_7_days(conn, finished_showdown): assert not retest_due(conn, u, S, now=t_last + timedelta(days=6))
-def test_retest_due_after_7_days(conn, finished_showdown): assert retest_due(conn, u, S, now=t_last + timedelta(days=7))
-def test_retest_swaps_sides_and_links(conn, finished_showdown):
-    p = next_retest_pair(conn, u, S, now=later); o = get_pair(conn, p.retest_of)
-    assert (p.a_id, p.b_id) == (o.b_id, o.a_id)
-def test_self_consistency_counts_same_item(): assert self_consistency(orig, retest_3_of_4_same) == 0.75
-def test_retest_choices_never_train(ctx, user): ...   # build_revealed meta n unchanged after retest
-```
-
-- [ ] **Step 2: Run the tests and confirm they fail**
-
-Run: `uv run pytest tests/eval/test_retest.py -q`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement it.** `now` is injectable everywhere. The API uses `datetime.now(UTC)`.
-
-- [ ] **Step 4: Run the tests and confirm they pass, then do a browser check** by shifting time: add a dev-only env var `AMBER_NOW` that overrides "now" in the API, and confirm the banner, then the retest, then the ceiling line on the scoreboard.
-
-Run: `uv run pytest -q`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/amber tests web
-git commit -m "feat: one-week retest gives the self-consistency ceiling"
-```
+- [ ] **Step 2: Confirm they fail.**
+- [ ] **Step 3: Implement.** `now` is injectable; the API uses `datetime.now(UTC)`, overridable by a dev-only `AMBER_NOW` env var.
+- [ ] **Step 4: Confirm pass**, browser check by shifting `AMBER_NOW`.
+- [ ] **Step 5: Commit** in small commits, push.
 
 ---
 
 ## Phase 6: Search
 
-### Task 19: Personalized search
+### Task 20: Search ranked by any of your yous
 
 **Files:**
 - Create: `src/amber/search/__init__.py`, `src/amber/search/rerank.py`, `tests/search/test_rerank.py`, `web/src/screens/Search.tsx`
-- Modify: `src/amber/api/app.py` (`GET /api/users/{uid}/search?q=…&you=revealed`), `web/src/App.tsx`
+- Modify: `src/amber/api/app.py` (`GET /api/users/{uid}/search?q=…&you=art`), `web/src/App.tsx`
 
 **Interfaces:**
-- Consumes: `VectorIndex.top_k` (4), the frozen yous via `load_yous` (8), `allowed_ids` (10).
-- Produces:
-  - `@dataclass class SearchResult: generic: list[str]; personal: list[str]`
-  - `search(query: str, you: You | None, encoder: Encoder, index: VectorIndex, allowed: set[str], n_candidates: int = SEARCH_CANDIDATES, n_results: int = SEARCH_RESULTS, lam: float = SEARCH_LAMBDA) -> SearchResult`
-    - candidates are the top `n_candidates` from `index.top_k(embed_texts([query])[0], use_centered=False, allowed=allowed)`
-    - `generic` is the first `n_results` of those
-    - `personal` reranks candidates by `zscore(query_sim) + lam · zscore(you.w · centered(item))`
-    - if `you` is `None` or abstains, `personal == generic`
-- API returns `{generic: [Item], personal: [Item], you}`. `you` defaults to `revealed` and can be any frozen You name, so search can be ranked by your Art you or Big Five you.
-- UI: a query box, two columns ("Everyone" and "You"), and a You picker.
+- `@dataclass class SearchResult: generic: list[str]; personal: list[str]`
+- `search(query, you, encoder, index, allowed, n_candidates=SEARCH_CANDIDATES, n_results=SEARCH_RESULTS, lam=SEARCH_LAMBDA) -> SearchResult`
+- `you` defaults to `art` (the headline) and can be any You. The search box is the one optional text input in the app; suggested query chips ("black jacket", "summer dress", "sneakers", …) make it tap-only by default.
+- UI: query chips + box, two columns ("Everyone" / "Ranked by your art taste"), You picker.
 
-- [ ] **Step 1: Write the failing tests**
-
-```python
-def test_abstain_means_identical(): r = search("shirt", You("revealed", None, {}), enc, idx, allowed); assert r.personal == r.generic
-def test_lambda_zero_means_identical(): r = search("shirt", red_you, enc, idx, allowed, lam=0.0); assert r.personal == r.generic
-def test_search_respects_allowed(): r = search("shirt", red_you, enc, idx, {"c:1", "c:2", "c:3"}); assert set(r.generic + r.personal) <= {"c:1", "c:2", "c:3"}
-def test_personal_promotes_preferred_items(): r = search("shirt", red_you, enc, idx, allowed); assert rank_of_red(r.personal) < rank_of_red(r.generic)
-```
-
-- [ ] **Step 2: Run the tests and confirm they fail**
-
-Run: `uv run pytest tests/search -q`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement `rerank.py`, the route, and the Search screen.**
-
-- [ ] **Step 4: Run the tests and confirm they pass, then do a browser check** that "black jacket" gives two visibly different columns for a finished user.
-
-Run: `uv run pytest -q`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/amber tests web
-git commit -m "feat: personalized search — generic vs ranked-by-you"
-```
+- [ ] **Step 1: Write the failing tests** (`test_search_respects_allowed`, ranking changes with `you`, `you=None` → generic only)
+- [ ] **Step 2: Confirm they fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Confirm pass**, browser check that "black jacket" gives visibly different columns.
+- [ ] **Step 5: Commit** in small commits, push.
 
 ---
 
 ## Phase 7: Ship
 
-### Task 20: README, real results, demo
+### Task 21: README, real results, demo
 
 **Files:**
-- Create: `README.md`, `docs/results/first-run.md`, `docs/demo.gif`
-- Modify: `NOTES.md` (move what's now decided out of "Open questions")
+- Create: `docs/results/first-run.md`, `docs/demo.gif`
+- Modify: `README.md`, `NOTES.md`
 
-- [ ] **Step 1: Check the whole suite**
-
-Run: `uv run pytest -q && uv run pytest -q -m slow && uv run ruff check . && npm --prefix web run build`
-Expected: all pass, and the web build succeeds.
-
-- [ ] **Step 2: Do your own full run.** Play the full flow and record the scoreboard, the cosines and the readout in `docs/results/first-run.md`. Fill in the retest a week later.
-
-- [ ] **Step 3: Write `README.md`.** Cover:
-  - the one-line pitch
-  - the five yous table
-  - how it works: the vector space, centering, PCA, the probit model, active learning, and the showdown rules
-  - a results table with CIs from `first-run.md`
-  - how to run it in 4 commands
-  - honest caveats: pretrained models have seen product photos; n = 1; IPIP isn't a clinical instrument
-  - credits and licenses: AIC CC0, the IPIP public-domain items, and the clothing dataset's source
-
-- [ ] **Step 4: Record a demo GIF** of this-or-that, the showdown and Results, under 10 MB.
-
-- [ ] **Step 5: Commit and push** (pushing to the public repo needs the user's OK at that point)
-
-```bash
-git add README.md docs NOTES.md
-git commit -m "docs: README with first real results and demo"
-git push origin main
-```
+- [ ] **Step 1: Check the whole suite.** `uv run pytest -q && uv run pytest -q -m slow && uv run ruff check . && npm --prefix web run build`
+- [ ] **Step 2: The user does a full run.** Record scoreboard, curves, cosines and readout in `docs/results/first-run.md`; fill in the retest a week later.
+- [ ] **Step 3: Write `README.md`:** the one-line question ("Can your taste in art predict what you'd wear?"), the headline number, the four yous, how it works (vector space, centering, PCA, probit, prequential scoring, freeze rules), results with CIs, how to run it in 4 commands, honest caveats (n = 1; CLIP has seen product photos; Mini-IPIP isn't clinical), credits and licenses, and the research it builds on (from NOTES.md).
+- [ ] **Step 4: Record a demo GIF** (< 10 MB) of art picks, clothes picks with the live tally, and the results page.
+- [ ] **Step 5: Commit and push** (pushing to the public repo is approved).
 
 ---
 
 ## Later (each one is its own plan)
 
-- **Friends mode:** multiple users, a leaderboard, and an "average person" baseline (the mean of other users' revealed `w`).
-- **Population arm:** learn a personality → taste mapping across users. That *does* train on consumer data, so it's a separate, clearly labeled You.
-- **More domains:** rooms and furniture, music covers. Does art taste carry over everywhere?
-- **The paper:** pre-register the hypotheses, recruit 30–50 people, and use the retest ceiling and normalized accuracy as in Park et al. 2024.
+- **Host it at `amber.yuvijain.com` for $0:** Cloudflare Pages (static site) + R2 (thumbnails; trim the catalog to fit) + D1 (save everyone's results). Precompute every vector and text direction offline, port the 32-dim probit model and pair flow to TypeScript so nothing runs server-side but D1 writes. Verify the clothing dataset's license first, or switch catalogs.
+- **Friends / population results:** with D1 storing runs, compare art → clothes transfer across people and add an "average person" baseline.
+- **Image-based Big Five:** replace Mini-IPIP with forced-choice image pairs (Hilliard et al. 2022 got r = .60–.78 vs. IPIP-NEO-120 in 5 min), making the whole app pictures-only. Needs its own validation.
+- **More domains:** rooms, architecture (Vessel et al. 2018: highly individual, like art).
+- **The paper:** pre-register, recruit 30–50 people, report chance-corrected normalized accuracy.

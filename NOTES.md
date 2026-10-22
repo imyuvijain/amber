@@ -8,6 +8,25 @@ Everything decided so far. The build plan is in [PLAN.md](PLAN.md).
 - **2026-10-23:** `PLAN.md` written (20 tasks in 7 phases). The hardware check is done: Apple M5, 24 GB RAM, 311 GB free, Python 3.14 (the project pins 3.12 via uv).
 - **GitHub:** `imyuvijain/amber` is **public** and empty. The local repo is set up with that remote, but nothing is pushed yet. Waiting on your OK.
 
+## Redesign on 2026-10-22: art → clothing, tap-only
+
+**The question:** can your taste in art predict what you'd wear? Chosen over "art-only" (pretty but no testable claim) and "clothing-only" (a generic recommender) because it gives one headline number that nobody else has.
+
+**User constraints:** no written answers anywhere; onboarding 2–5 minutes; no paid APIs (no LLM needed now); local demo first, hosting at `amber.yuvijain.com` on Cloudflare later for $0, saving results.
+
+**What the research says, and what it changed:**
+- *Personality predicts clothes weakly.* Openness and extraversion are the only consistent links, with small effects (e.g. openness → "urban, sophisticated" dress, OR 1.8; [PMC8455911](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8455911/)). Big Five stays as the comparison arm, measured cheaply.
+- *Art taste is individual, and taste partly transfers.* Shared taste is high for faces and landscapes but low for art and architecture, so art separates people ([Vessel et al. 2018](https://www.aesthetics.mpg.de/en/research/former-departments-and-research-groups/department-of-neuroscience/aesthetic-experience/multiple-visual-domains.html)). A model of one rater trained on one domain recovers ~60% of in-domain accuracy on another, art ↔ fashion included ([XPASS-Vis preprint](https://arxiv.org/pdf/2606.15629)). Preference for harmony forms one factor across colour, shape and music ([Palmer & Griscom](https://palmerlab.berkeley.edu/pdf/PalmerGriscom2013.pdf)). → Art is the headline you.
+- *Openness drives art taste* ([Chamorro-Premuzic et al.](https://research.gold.ac.uk/id/eprint/5046)), so art and Big Five aren't independent; the cosine table shows how much they overlap.
+- *Choices beat self-report.* A model beat a friend's personality judgment after 70 Facebook likes ([Youyou et al. 2015](https://news.stanford.edu/2015/01/12/personality-computer-knows-011215/)); favourite pictures predict personality ([Segalin et al.](https://eprints.gla.ac.uk/124063)). → Taste picks are the core input.
+- *Short tests:* Mini-IPIP, 20 items, α ≈ .73–.82 ([validation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12437056/)), public domain. Values (TIVI, 10 items, [free](https://gosling.psy.utexas.edu/two-short-measures-of-values-tivi-and-twivi/)) considered and cut to keep the story to four yous.
+- *Pictures-only personality is possible* (forced-choice image pairs, r = .60–.78 vs. IPIP-NEO-120, [Hilliard et al. 2022](https://pmc.ncbi.nlm.nih.gov/articles/PMC8883940/)) but the item bank isn't public. Parked under Later.
+- *Adaptive testing* saves ~27–67% of items in simulations ([Nieto 2019](https://produccioncientifica.ucm.es/documentos/6198997349d6133331f3ecca)); not worth it at 20 items.
+
+**Design consequences:** four yous (stated via tapped style words, Big Five via Mini-IPIP + Mini-Markers adjectives, art, revealed); 20 art picks; 40 random clothing picks, every one scored, with revealed scored prequentially; chance-corrected ceiling; ≈ 4-minute session. Details in PLAN.md, "Redesign of 2026-10-22".
+
+**Free LLM, if ever needed:** Cloudflare Workers AI gives 10,000 neurons/day free on open models (Llama, Qwen; not GPT). Not used now.
+
 ## Changed on 2026-10-23
 
 - **No 30 GB download.** The purchase history was only needed for the old "train on what people buy" idea.
