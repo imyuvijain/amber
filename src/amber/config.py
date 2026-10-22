@@ -23,7 +23,7 @@ MODEL_PRETRAINED: str = "laion2b_s34b_b79k"  # placeholder until Task 5 picks th
 # Clothing catalog
 KEEP_MASTER_CATEGORIES = ("Apparel", "Footwear", "Accessories")
 DEFAULT_SECTIONS = ("Apparel", "Footwear")
-THUMB_SIZE = (288, 384)  # (width, height) in pixels
+THUMB_SIZE = (216, 288)  # (width, height) in pixels
 NEUTRAL_PROMPT = "a photo of a piece of clothing"
 
 # Text search
