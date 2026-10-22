@@ -55,10 +55,10 @@ def test_save_answer_upserts_and_isolates_kinds_and_users(conn):
     save_answer(conn, u, "ipip", "e1", "3")
     save_answer(conn, u, "ipip", "e1", "5")
     save_answer(conn, u, "ipip", "e2", "1")
-    save_answer(conn, u, "values", "e1", "x")
+    save_answer(conn, u, "describe", "e1", "x")
     save_answer(conn, v, "ipip", "e1", "2")
     assert get_answers(conn, u, "ipip") == {"e1": "5", "e2": "1"}
-    assert get_answers(conn, u, "values") == {"e1": "x"}
+    assert get_answers(conn, u, "describe") == {"e1": "x"}
     assert get_answers(conn, v, "ipip") == {"e1": "2"}
     assert get_answers(conn, u, "filters") == {}
 
