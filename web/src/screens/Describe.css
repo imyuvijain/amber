@@ -1,0 +1,19 @@
+.describe-box {
+  width: 100%;
+  resize: vertical;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+  font-size: 1.25rem;
+  line-height: 1.45;
+}
+
+.describe-box:focus-visible {
+  border-color: var(--focus);
+}
+
+.describe-box::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
