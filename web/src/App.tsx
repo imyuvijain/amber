@@ -2,6 +2,7 @@ import { useCallback, useState, type ComponentType } from 'react'
 import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
 import Describe from './screens/Describe'
+import Scoreboard from './screens/Scoreboard'
 import Sections from './screens/Sections'
 import Showdown from './screens/Showdown'
 import ThisOrThat from './screens/ThisOrThat'
@@ -15,6 +16,7 @@ const SCREENS: Record<string, ComponentType<ScreenProps>> = {
   sections: Sections,
   train: ThisOrThat,
   showdown: Showdown,
+  scoreboard: Scoreboard,
 }
 
 function initial(): { userId: string | null; step: string } {
