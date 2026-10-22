@@ -202,6 +202,42 @@ def test_ingest_limit_counts_kept_items_and_stops_reading(tmp_path, fake_rows):
         ingest_clothes(tmp_path / "clothes", rows=fake_rows, limit=0)
 
 
+@pytest.mark.parametrize("error", [OSError("network down"), KeyboardInterrupt()])
+def test_ingest_interrupted_run_keeps_what_it_collected(tmp_path, fake_rows, error):
+    def stream():
+        yield from fake_rows[:2]
+        raise error
+
+    out = tmp_path / "clothes"
+    with pytest.raises(type(error)):
+        ingest_clothes(out, rows=stream())
+    assert list(pd.read_parquet(out / "items.parquet").id) == ["c:1", "c:2"]
+    # the next run picks up where it stopped
+    assert list(ingest_clothes(out, rows=fake_rows).id) == ["c:1", "c:2", "c:3"]
+
+
+def test_ingest_interrupted_run_merges_with_existing_parquet(tmp_path, fake_rows):
+    def stream():
+        yield fake_rows[1]
+        raise OSError("network down")
+
+    out = tmp_path / "clothes"
+    ingest_clothes(out, rows=fake_rows[:1])
+    with pytest.raises(OSError):
+        ingest_clothes(out, rows=stream())
+    assert list(pd.read_parquet(out / "items.parquet").id) == ["c:1", "c:2"]
+
+
+def test_ingest_failure_before_any_row_leaves_no_parquet(tmp_path):
+    def stream():
+        raise OSError("network down")
+        yield
+
+    with pytest.raises(OSError):
+        ingest_clothes(tmp_path / "clothes", rows=stream())
+    assert not (tmp_path / "clothes" / "items.parquet").exists()
+
+
 def test_ingest_empty_stream_writes_an_empty_catalog(tmp_path):
     df = ingest_clothes(tmp_path / "clothes", rows=[])
     assert len(df) == 0 and list(df.columns) == COLUMNS
