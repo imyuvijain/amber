@@ -88,4 +88,6 @@ def learning_curve(
         if c.chosen_id is not None
         and (p := predictions.get(c.pair_id, {}).get(you)) is not None
     ]
-    return [float(np.mean(credit[max(0, i + 1 - size) : i + 1])) for i in range(len(credit))]
+    return [
+        float(np.mean(credit[max(0, i + 1 - size) : i + 1])) for i in range(len(credit))
+    ]
