@@ -33,10 +33,10 @@ def test_score_counts_abstain_as_half():
         "p0": {"stated": 1.0, "revealed": 0.5},
         "p1": {"stated": 1.0, "revealed": 0.5},
         "p2": {"stated": 1.0, "revealed": 0.5},
-        "p3": {"stated": 0.0, "revealed": 0.5},  # chose b; stated said b (P(a)=0)
+        "p3": {"stated": 1.0, "revealed": 0.5},  # chose b; stated said a: wrong
     }
     s = _by_you(score_showdown(choices, preds))
-    assert s["stated"].accuracy == 0.75 and s["stated"].correct == 4.0
+    assert s["stated"].accuracy == 0.75 and s["stated"].correct == 3.0
     assert s["revealed"].accuracy == 0.5 and s["revealed"].correct == 2.0
     assert s["stated"].n == 4 and s["revealed"].n == 4
 
@@ -54,11 +54,11 @@ def test_results_follow_you_order_and_only_present_yous():
 
 
 def test_unanswered_and_unpredicted_pairs_are_ignored():
-    unanswered = Choice(**{**_choice(1).__dict__, "chosen_id": None, "answered_at": None})
-    choices = [_choice(0), unanswered, _choice(2)]
-    s = _by_you(
-        score_showdown(choices, {"p0": {"stated": 1.0}, "p1": {"stated": 1.0}})
+    unanswered = Choice(
+        **{**_choice(1).__dict__, "chosen_id": None, "answered_at": None}
     )
+    choices = [_choice(0), unanswered, _choice(2)]
+    s = _by_you(score_showdown(choices, {"p0": {"stated": 1.0}, "p1": {"stated": 1.0}}))
     assert s["stated"].n == 1
 
 
