@@ -17,8 +17,8 @@ SEED = 7  # used wherever randomness affects results
 # Vector space
 PCA_DIM = 32
 NEAR_DUP_COS = 0.95  # pairs at or above this cosine similarity are never shown together
-MODEL_NAME: str = "ViT-B-32"  # placeholder until Task 5 picks the winner
-MODEL_PRETRAINED: str = "laion2b_s34b_b79k"  # placeholder until Task 5 picks the winner
+MODEL_NAME: str = "ViT-B-32"  # chosen in Task 5; see docs/results/space.md
+MODEL_PRETRAINED: str = "laion2b_s34b_b79k"
 
 # Clothing catalog
 KEEP_MASTER_CATEGORIES = ("Apparel", "Footwear", "Accessories")
