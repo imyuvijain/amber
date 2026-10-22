@@ -80,7 +80,7 @@ def test_label_retrieval_ignores_small_groups():
 
 
 def test_label_retrieval_counts_wrong_neighbours():
-    idx, items, groups = _catalog({("Red", "Dresses"): 6, ("Blue", "Jeans"): 6})
+    idx, items, _ = _catalog({("Red", "Dresses"): 6, ("Blue", "Jeans"): 6})
     wrong = OracleEncoder({("Red", "Dresses"): 1, ("Blue", "Jeans"): 0})  # swapped axes
     assert label_retrieval_score(idx, items, wrong, k=5, min_group=5) == 0.0
 
