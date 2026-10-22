@@ -249,7 +249,7 @@ git commit -m "chore: project skeleton, config, fake encoder fixtures"
   - `thumb_path(item_id: str, data_dir: Path = DATA_DIR) -> Path`
   - `domain_of(item_id: str) -> Literal["clothes", "art"]`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Build `fake_rows` in the test: 5 dicts shaped like the Hugging Face rows, using the field names `id, gender, masterCategory, subCategory, articleType, baseColour, season, year, usage, productDisplayName, image`. Three have kept categories, one is `"Personal Care"`, and one has an image whose `.convert()` raises.
 
@@ -280,16 +280,16 @@ def test_domain_of_and_thumb_path(tmp_path):
         domain_of("x:1")
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/data/test_clothes.py -q`
 Expected: FAIL (module missing).
 
-- [ ] **Step 3: Implement `clothes.py` and `catalog.py`**
+- [x] **Step 3: Implement `clothes.py` and `catalog.py`**
 
 `ingest_clothes` skips rows whose thumbnail already exists (resume). It catches image decode errors per row, logs them, and moves on. It writes the parquet once at the end, merging with the existing parquet if one is present.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/data/test_clothes.py -q`
 Expected: PASS.
@@ -304,7 +304,7 @@ Expected:
 
 Streaming moves about 2 GB over the network once, but only the thumbnails are kept.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/amber/data src/amber/cli.py tests/data
