@@ -33,7 +33,9 @@ def test_build_frozen_yous_builds_only_registered_frozen_ones(ctx, user):
     assert "revealed" not in yous
 
 
-def test_build_frozen_yous_uses_a_bigfive_builder_once_registered(ctx, user, monkeypatch):
+def test_build_frozen_yous_uses_a_bigfive_builder_once_registered(
+    ctx, user, monkeypatch
+):
     from amber.yous.base import You
 
     monkeypatch.setitem(BUILDERS, "bigfive", lambda *_: You("bigfive", None, {}))
