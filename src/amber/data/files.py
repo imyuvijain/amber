@@ -10,9 +10,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageOps
 
-THUMB_QUALITY = 85
+THUMB_QUALITY = 80
 
 
 def clean_text(value: object) -> str:
@@ -22,12 +22,35 @@ def clean_text(value: object) -> str:
     return str(value).strip()
 
 
-def save_thumbnail(thumb: Image.Image, dest: Path) -> None:
+def save_thumbnail(
+    thumb: Image.Image, dest: Path, quality: int = THUMB_QUALITY
+) -> None:
     """Write via a temp file so a killed run never leaves a half-written thumbnail,
     which the resume check would otherwise treat as done."""
     tmp = dest.with_name(f".{dest.name}.tmp")
-    thumb.save(tmp, format="JPEG", quality=THUMB_QUALITY)
+    thumb.save(tmp, format="JPEG", quality=quality)
     os.replace(tmp, dest)
+
+
+def shrink_thumbnails(thumbs_dir: Path, size: tuple[int, int], quality: int) -> int:
+    """Re-encode every `*.jpg` in `thumbs_dir` at exactly `size` (width, height) and JPEG
+    `quality`, in place, and return how many files were rewritten.
+
+    Each file is replaced atomically, and a file that is already `size` is left untouched,
+    so the run can be interrupted and repeated. A missing directory has nothing to shrink.
+    """
+    thumbs_dir = Path(thumbs_dir)
+    if not thumbs_dir.is_dir():
+        return 0
+    rewritten = 0
+    for path in sorted(thumbs_dir.glob("*.jpg")):
+        with Image.open(path) as im:
+            if im.size == tuple(size):
+                continue
+            thumb = ImageOps.fit(im.convert("RGB"), size, Image.Resampling.LANCZOS)
+        save_thumbnail(thumb, path, quality)
+        rewritten += 1
+    return rewritten
 
 
 def merge_items(
