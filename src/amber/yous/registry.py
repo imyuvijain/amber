@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from amber.yous.art_taste import build_art
 from amber.yous.base import You, YouName
 from amber.yous.revealed import build_revealed
 from amber.yous.stated import build_stated
@@ -18,6 +19,7 @@ Builder = Callable[[sqlite3.Connection, str, "AppContext"], You]
 
 BUILDERS: dict[YouName, Builder] = {
     "stated": build_stated,
+    "art": build_art,
     "revealed": build_revealed,
 }
 
