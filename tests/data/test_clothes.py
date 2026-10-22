@@ -1,5 +1,8 @@
 import io
 import logging
+import os
+import subprocess
+import sys
 
 import pandas as pd
 import pytest
@@ -239,8 +242,22 @@ def test_domain_of_and_thumb_path(tmp_path):
 
 @pytest.mark.slow
 def test_real_stream_first_rows(tmp_path):
-    df = ingest_clothes(tmp_path / "clothes", limit=5)
+    # Real Hugging Face rows through the real CLI. A subprocess, because stopping a
+    # pyarrow stream half-way is only clean when the CLI exits without interpreter teardown.
+    proc = subprocess.run(
+        [sys.executable, "-c", "from amber.cli import app; app()"]
+        + ["ingest", "clothes", "--limit", "5"],
+        env={**os.environ, "AMBER_DATA_DIR": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.split()[0] == "5"
+    df = load_items("clothes", data_dir=tmp_path)
     assert len(df) == 5 and list(df.columns) == COLUMNS
+    assert df.master_category.isin(["Apparel", "Footwear", "Accessories"]).all()
     for item_id in df.id:
         with Image.open(thumb_path(item_id, data_dir=tmp_path)) as im:
             assert im.size == (288, 384)
