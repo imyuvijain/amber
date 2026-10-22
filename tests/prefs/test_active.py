@@ -1,14 +1,15 @@
 import numpy as np
 import pytest
-from amber.prefs.active import choose_pair, random_pair
+from synthetic_catalog import synthetic_catalog
 
+from amber.prefs.active import choose_pair, random_pair
 from amber.prefs.model import PreferenceModel
 
 SEED = 7
 
 
-def test_choose_pair_distinct_and_not_excluded(catalog):
-    X, D, IDS = catalog
+def test_choose_pair_distinct_and_not_excluded():
+    X, D, IDS = synthetic_catalog()
     rng = np.random.default_rng(SEED)
     a, b = choose_pair(PreferenceModel(32), X, IDS, D, rng, exclude={"c:1"})
     assert a != b and "c:1" not in (a, b)
@@ -43,8 +44,8 @@ def test_choose_pair_prefers_informative_pairs():
     assert set(pair) == {"c:2", "c:3"}
 
 
-def test_choose_pair_is_vectorised_and_fast(catalog):
-    X, D, IDS = catalog
+def test_choose_pair_is_vectorised_and_fast():
+    X, D, IDS = synthetic_catalog()
     import time
 
     model = PreferenceModel(32)
@@ -67,8 +68,8 @@ def test_choose_pair_raises_when_no_valid_pair():
         )
 
 
-def test_random_pair_respects_exclude(catalog):
-    _, D, IDS = catalog
+def test_random_pair_respects_exclude():
+    _, D, IDS = synthetic_catalog()
     rng = np.random.default_rng(SEED)
     exclude = {f"c:{i}" for i in range(490)}
     for _ in range(50):
@@ -84,8 +85,8 @@ def test_random_pair_skips_near_duplicates():
         assert set(random_pair(ids, Ds, rng)) != {"c:0", "c:1"}
 
 
-def test_random_pair_raises_when_nothing_left(catalog):
-    _, D, IDS = catalog
+def test_random_pair_raises_when_nothing_left():
+    _, D, IDS = synthetic_catalog()
     rng = np.random.default_rng(SEED)
     with pytest.raises(ValueError, match="pair"):
         random_pair(IDS, D, rng, exclude=set(IDS[:-1]))
