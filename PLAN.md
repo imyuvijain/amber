@@ -1104,7 +1104,7 @@ Tasks 14–16 turn the first-design app (train → showdown, free-text descripti
   - `GET /results` returns `{scores_all, scores_late, curves: {you: [float]}, n_clothes}`.
 - Web: steps become `welcome → sections → describe → art → clothes → results` (describe is replaced in Task 15, the quiz inserted in Task 16). The clothes screen shows a running tally per You after each pick. The scoreboard shows `scores_all` with the late-window number beside it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_clothes_train_phase_is_gone(ctx, user):
@@ -1135,11 +1135,11 @@ def test_score_window_selects_positions(): ...
 def test_results_route_shape(client, finished_user): ...
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail.** `uv run pytest -q` — new tests FAIL; then update or delete each old-flow test the change obsoletes (list them in the commit message).
-- [ ] **Step 3: Implement** config, registry, revealed, flow, metrics, API, then the web changes.
-- [ ] **Step 4: Run the tests and confirm they pass.** `uv run pytest -q && npm --prefix web run build`
+- [x] **Step 2: Run the tests and confirm they fail.** `uv run pytest -q` — new tests FAIL; then update or delete each old-flow test the change obsoletes (list them in the commit message).
+- [x] **Step 3: Implement** config, registry, revealed, flow, metrics, API, then the web changes.
+- [x] **Step 4: Run the tests and confirm they pass.** `uv run pytest -q && npm --prefix web run build`
 - [ ] **Step 5: Browser check** (start both servers with `preview_start`): sections → describe → 20 art picks → 40 clothes picks with a live tally → results with four rows possible (stated, art, revealed now; bigfive after Task 16). Reload mid-pair resumes; a fast double-click records one answer. Screenshot the results.
-- [ ] **Step 6: Commit** in small commits (see Global Constraints), push.
+- [x] **Step 6: Commit** in small commits (see Global Constraints), push.
 
 ### Task 15: Stated you from tapped style words
 
