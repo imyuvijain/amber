@@ -1,6 +1,9 @@
 """Command-line entry point (`amber`). Subcommands are added by later tasks."""
 
+import atexit
 import logging
+import os
+import sys
 from typing import Annotated
 
 import typer
@@ -27,8 +30,23 @@ def main() -> None:
 def ingest() -> None:
     """Build the item catalogs."""
     logging.basicConfig(
-        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+        level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s"
     )
+    logging.getLogger("amber").setLevel(logging.INFO)  # progress, without HTTP chatter
+
+
+def _exit_without_teardown() -> None:
+    """Leave now, after running Python-level exit handlers but skipping C++ teardown.
+
+    A pyarrow/datasets stream that is abandoned half-way (as `--limit` does) leaves an
+    async read pending in Arrow's thread pool; at interpreter exit the pool's destructor
+    then waits on it forever (observed with pyarrow 26 / datasets 5.1). A stream that is
+    read to the end exits normally.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    atexit._run_exitfuncs()
+    os._exit(0)
 
 
 @ingest_app.command()
@@ -44,3 +62,5 @@ def clothes(
     out_dir = config.DATA_DIR / "clothes"
     items = ingest_clothes(out_dir, limit=limit)
     typer.echo(f"{len(items)} clothing items in {out_dir}")
+    if limit is not None:
+        _exit_without_teardown()
