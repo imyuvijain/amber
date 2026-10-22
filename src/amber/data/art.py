@@ -230,9 +230,18 @@ def ingest_art(
             if not dest.exists():
                 try:
                     thumb = _download_thumbnail(fetcher, image_id)
-                except httpx.TransportError:
-                    raise  # the network is down: stop (rows so far are saved), don't skip on
-                except Exception as exc:  # HTTP status, PIL errors: skip the item
+                except (
+                    Exception
+                ) as exc:  # HTTP status, timeout, PIL error: skip the item
+                    if isinstance(exc, httpx.TransportError) and not isinstance(
+                        exc, httpx.TimeoutException
+                    ):
+                        # refused, reset, no route: the network is down. Stop (the rows
+                        # so far are saved) instead of skipping every image after this.
+                        # A timeout is skipped: results come in a fixed order and a
+                        # skipped image has no thumbnail, so a rerun that died here
+                        # would die at the same image every time.
+                        raise
                     logger.warning("skipping a:%d, image not usable: %s", art_id, exc)
                     skipped += 1
                     failures_in_a_row += 1
