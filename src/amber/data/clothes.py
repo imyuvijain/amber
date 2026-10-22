@@ -109,6 +109,16 @@ def _merge(
     return merged.loc[order].reset_index(drop=True)
 
 
+def _write_catalog(parquet: Path, thumbs: Path, records: list[dict]) -> pd.DataFrame:
+    """Merge `records` into the existing parquet (if any) and write it atomically."""
+    existing = pd.read_parquet(parquet) if parquet.exists() else None
+    items = _merge(existing, _frame(records), thumbs)
+    tmp = parquet.with_name(f"{parquet.name}.tmp")
+    items.to_parquet(tmp, index=False)
+    os.replace(tmp, parquet)
+    return items
+
+
 def ingest_clothes(
     out_dir: Path, rows: Iterable[dict] | None = None, limit: int | None = None
 ) -> pd.DataFrame:
@@ -119,7 +129,9 @@ def ingest_clothes(
     streams the dataset. Rows outside the kept master categories are dropped; rows whose
     image cannot be decoded are logged and skipped. `limit` stops after that many items
     have been collected in this run (useful for quick trials). The returned/written table
-    also keeps rows from a previous run's parquet, de-duplicated by `id`.
+    also keeps rows from a previous run's parquet, de-duplicated by `id`. If the run is
+    interrupted (an exception from the stream, Ctrl-C), the rows collected so far are
+    saved before the exception propagates.
     """
     if limit is not None and limit < 1:
         raise ValueError("limit must be a positive number of items")
@@ -132,40 +144,47 @@ def ingest_clothes(
 
     records: list[dict] = []
     skipped = 0
-    for row in rows:
-        if _text(row.get("masterCategory")) not in config.KEEP_MASTER_CATEGORIES:
-            continue
-        try:
-            n = int(row["id"])
-        except (KeyError, TypeError, ValueError):
-            logger.warning("skipping row without a usable id: %r", row.get("id"))
-            skipped += 1
-            continue
-        dest = thumbs / f"{n}.jpg"
-        if not dest.exists():
+    try:
+        for row in rows:
+            if _text(row.get("masterCategory")) not in config.KEEP_MASTER_CATEGORIES:
+                continue
             try:
-                thumb = _thumbnail(row["image"])
-            except Exception as exc:  # noqa: BLE001 - PIL raises many types; skip the item
-                logger.warning("skipping c:%d, image not decodable: %s", n, exc)
+                n = int(row["id"])
+            except (KeyError, TypeError, ValueError):
+                logger.warning("skipping row without a usable id: %r", row.get("id"))
                 skipped += 1
                 continue
-            _save_thumbnail(thumb, dest)
-        records.append(
-            {
-                "id": f"c:{n}",
-                **{col: _text(row.get(field)) for col, field in _TEXT_FIELDS.items()},
-                "year": _year(row.get("year")),
-            }
-        )
-        if len(records) % PROGRESS_EVERY == 0:
-            logger.info("%d items collected", len(records))
-        if limit is not None and len(records) >= limit:
-            break
+            dest = thumbs / f"{n}.jpg"
+            if not dest.exists():
+                try:
+                    thumb = _thumbnail(row["image"])
+                except Exception as exc:  # noqa: BLE001 - PIL raises many types; skip the item
+                    logger.warning("skipping c:%d, image not decodable: %s", n, exc)
+                    skipped += 1
+                    continue
+                _save_thumbnail(thumb, dest)
+            records.append(
+                {
+                    "id": f"c:{n}",
+                    **{
+                        col: _text(row.get(field))
+                        for col, field in _TEXT_FIELDS.items()
+                    },
+                    "year": _year(row.get("year")),
+                }
+            )
+            if len(records) % PROGRESS_EVERY == 0:
+                logger.info("%d items collected", len(records))
+            if limit is not None and len(records) >= limit:
+                break
+    except BaseException:
+        # network error, full disk, Ctrl-C: keep the metadata of the thumbnails written
+        # so far (the next run would rebuild it anyway, but only after re-streaming)
+        if records:
+            items = _write_catalog(parquet, thumbs, records)
+            logger.warning("interrupted; saved %d items to the catalog", len(items))
+        raise
 
-    existing = pd.read_parquet(parquet) if parquet.exists() else None
-    items = _merge(existing, _frame(records), thumbs)
-    tmp = parquet.with_name(f"{parquet.name}.tmp")
-    items.to_parquet(tmp, index=False)
-    os.replace(tmp, parquet)
+    items = _write_catalog(parquet, thumbs, records)
     logger.info("%d items in catalog (%d skipped this run)", len(items), skipped)
     return items
