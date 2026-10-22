@@ -772,7 +772,7 @@ git commit -m "feat: SQLite store with idempotent answers and prediction gate"
   - `BUILDERS: dict[YouName, Callable[[sqlite3.Connection, str, AppContext], You]]` (`stated` registered here)
   - `build_all_yous(conn, user_id, ctx) -> dict[YouName, You]`: runs every registered builder, and one builder raising becomes an abstaining `You` whose meta records the error
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_predict_sign_and_abstain():
@@ -796,19 +796,19 @@ def test_build_all_yous_isolates_failures(ctx, user, monkeypatch):
 
 `ctx` is a test fixture: `load_context(fixture_data, Settings(6, 6, 3, 2, 7), FakeEncoder())` with a `":memory:"` DB, after `embed_domain` has run on both fixture domains. `user` is a fixture that runs `create_user(ctx.conn, "test")`.
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/yous -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `base.py`, `stated.py`, `registry.py` and `context.py`.** Add the `ctx` and `user` fixtures to `tests/conftest.py`.
+- [x] **Step 3: Implement `base.py`, `stated.py`, `registry.py` and `context.py`.** Add the `ctx` and `user` fixtures to `tests/conftest.py`.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Run: `uv run pytest tests/yous -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber/yous src/amber/context.py tests
