@@ -340,6 +340,49 @@ def test_an_artwork_repeated_on_a_later_page_counts_once(tmp_path, monkeypatch):
     assert len(aic.image_requests) == 4  # a:2 is not downloaded twice
 
 
+# --- what real artic.edu needs (found by running against it) ------------------------
+
+
+def test_requests_use_an_identifying_user_agent_not_the_httpx_default(
+    tmp_path, aic, mock_client
+):
+    # artic.edu's Cloudflare answers 403 to "python-httpx/x.y" even with AIC-User-Agent
+    ingest_art(tmp_path, n=3, client=mock_client, min_interval=0)
+    assert aic.requests
+    for request in aic.requests:
+        assert request.headers["User-Agent"].startswith("amber")
+        assert "httpx" not in request.headers["User-Agent"]
+        assert request.headers["AIC-User-Agent"] == AIC_HEADERS["AIC-User-Agent"]
+
+
+def test_aborts_when_images_keep_failing_instead_of_walking_every_result(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(art, "MAX_CONSECUTIVE_FAILURES", 3)
+    aic = _many(10)
+    # a:1 downloads fine, every later image is refused (as happened with the httpx UA)
+    aic.faults.append(
+        lambda r: (
+            httpx.Response(403)
+            if r.url.path != SEARCH_PATH and "/img-1/" not in r.url.path
+            else None
+        )
+    )
+    with pytest.raises(RuntimeError, match="3 images in a row"):
+        ingest_art(tmp_path, n=5, client=aic.client(), min_interval=0)
+    assert len(aic.image_requests) == 1 + 3  # and then it stopped (403 is not retried)
+    assert list(pd.read_parquet(tmp_path / "items.parquet").id) == ["a:1"]
+
+
+def test_a_success_resets_the_failure_streak(tmp_path, monkeypatch):
+    monkeypatch.setattr(art, "MAX_CONSECUTIVE_FAILURES", 3)
+    aic = _many(6)
+    for i in (1, 2, 4, 5):  # fail, fail, ok, fail, fail, ok: never 3 in a row
+        del aic.images[f"img-{i}"]
+    df = ingest_art(tmp_path, n=6, client=aic.client(), min_interval=0)
+    assert df.id.tolist() == ["a:3", "a:6"]
+
+
 # --- throttling --------------------------------------------------------------------
 
 
