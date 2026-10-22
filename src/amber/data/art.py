@@ -19,7 +19,7 @@ import httpx
 import pandas as pd
 from PIL import Image
 
-from amber.data.store import clean_text, save_thumbnail, write_catalog
+from amber.data.files import clean_text, save_thumbnail, write_catalog
 
 logger = logging.getLogger(__name__)
 
