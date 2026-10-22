@@ -389,7 +389,7 @@ git commit -m "feat: fetch public-domain art catalog from AIC"
   - `project(self, X: np.ndarray) -> np.ndarray` of shape `(n, k)`, and `lift(self, w: np.ndarray) -> np.ndarray` of shape `(d,)`
   - `save(dir)` and `load(dir)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_index_roundtrip(tmp_path):
@@ -422,19 +422,19 @@ def test_clip_encoder_color_sanity(tmp_path):
     assert red.shape == (enc.dim,) and red @ t > blue @ t
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `uv run pytest tests/space -q`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement the three modules.** `ClipEncoder` uses `open_clip.create_model_and_transforms` and `get_tokenizer`. Run it under `torch.inference_mode()` and normalize the outputs.
+- [x] **Step 3: Implement the three modules.** `ClipEncoder` uses `open_clip.create_model_and_transforms` and `get_tokenizer`. Run it under `torch.inference_mode()` and normalize the outputs.
 
-- [ ] **Step 4: Run all tests, including the slow ones (the slow ones download a model once, about 600 MB)**
+- [x] **Step 4: Run all tests, including the slow ones (the slow ones download a model once, about 600 MB)**
 
 Run: `uv run pytest tests/space -q && uv run pytest tests/space -q -m slow`
 Expected: PASS both.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/amber/space tests/space
