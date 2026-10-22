@@ -15,7 +15,7 @@ def synthetic_catalog(n: int = 500, k: int = 32, seed: int = SEED):
     clothes (mean row norm ~0.75, variance decaying across components), plus
     unit-length "full embeddings" for the near-duplicate test."""
     rng = np.random.default_rng(seed)
-    spread = 1.0 / np.sqrt(1.0 + np.arange(k))
+    spread = (1.0 + np.arange(k)) ** -0.4
     centers = rng.normal(size=(8, k)) * spread
     X = centers[rng.integers(0, 8, n)] + rng.normal(size=(n, k)) * spread * 0.4
     X *= 0.75 / np.linalg.norm(X, axis=1).mean()
