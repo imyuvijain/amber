@@ -4,7 +4,10 @@ import atexit
 import logging
 import os
 import sys
+import time
 import traceback
+from enum import StrEnum
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -94,3 +97,171 @@ def art(
     out_dir = config.DATA_DIR / "art"
     items = ingest_art(out_dir, n=n)
     typer.echo(f"{len(items)} artworks in {out_dir}")
+
+
+# --- the embedding space ----------------------------------------------------------------
+
+
+class _EmbedDomain(StrEnum):
+    clothes = "clothes"
+    art = "art"
+    all = "all"
+
+
+class _Domain(StrEnum):
+    clothes = "clothes"
+    art = "art"
+
+
+_ModelOption = Annotated[str, typer.Option(help="open_clip model name.")]
+_PretrainedOption = Annotated[
+    str, typer.Option(help="open_clip pretrained weights tag.")
+]
+_CONTACT_SHEET_COLUMNS = 4
+_CONTACT_SHEET_ROWS = 3  # 4 x 3 = the top 12
+
+
+def _log_progress() -> None:
+    logging.basicConfig(
+        level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s"
+    )
+    logging.getLogger("amber").setLevel(logging.INFO)
+
+
+def _fail(message: str) -> typer.Exit:
+    typer.echo(message, err=True)
+    return typer.Exit(1)
+
+
+@app.command()
+def embed(
+    model: _ModelOption = config.MODEL_NAME,
+    pretrained: _PretrainedOption = config.MODEL_PRETRAINED,
+    domain: Annotated[
+        _EmbedDomain, typer.Option(help="Which catalog to embed.")
+    ] = _EmbedDomain.all,
+) -> None:
+    """Embed every thumbnail and save the vectors + PCA bases under <data dir>/<domain>/emb/."""
+    _log_progress()
+    domains = ["clothes", "art"] if domain is _EmbedDomain.all else [domain.value]
+    todo = []
+    for name in domains:
+        if (config.DATA_DIR / name / "items.parquet").exists():
+            todo.append(name)
+        elif domain is _EmbedDomain.all:
+            typer.echo(f"skipping {name}: not ingested yet (run `amber ingest {name}`)")
+        else:
+            raise _fail(
+                f"No {name} catalog in {config.DATA_DIR}: run `amber ingest {name}`."
+            )
+
+    from amber.space import encoder as encoder_module  # loads torch; keep `--help` fast
+    from amber.space.index import embed_dir, embed_domain
+
+    encoder = encoder_module.ClipEncoder(model, pretrained)
+    for name in todo:
+        started = time.perf_counter()
+        index = embed_domain(name, encoder, data_dir=config.DATA_DIR)
+        seconds = time.perf_counter() - started
+        typer.echo(
+            f"{name}: {len(index)} items embedded in {seconds:.1f}s "
+            f"(dim {encoder.dim}) -> {embed_dir(name, encoder, config.DATA_DIR)}"
+        )
+
+
+@app.command("eval-space")
+def eval_space(
+    model: _ModelOption = config.MODEL_NAME,
+    pretrained: _PretrainedOption = config.MODEL_PRETRAINED,
+    min_group: Annotated[
+        int, typer.Option(min=1, help="Smallest (colour, article type) group to score.")
+    ] = 20,
+) -> None:
+    """Score a model's clothes embeddings: can text queries find items by colour + type?"""
+    from amber.data.catalog import load_items
+    from amber.space import encoder as encoder_module
+    from amber.space.evaluate import label_retrieval_score
+    from amber.space.index import VectorIndex, embed_dir
+
+    encoder = encoder_module.ClipEncoder(model, pretrained)
+    directory = embed_dir("clothes", encoder, config.DATA_DIR)
+    if not directory.exists():
+        raise _fail(f"No embeddings for {model}/{pretrained}: run `amber embed` first.")
+    index = VectorIndex.load(directory)
+    items = load_items("clothes", data_dir=config.DATA_DIR)
+    try:
+        score = label_retrieval_score(index, items, encoder, k=20, min_group=min_group)
+    except ValueError as err:
+        raise _fail(f"{err}; lower --min-group.") from err
+    typer.echo(
+        f"{model}/{pretrained}: P@20 = {score:.4f} (dim {encoder.dim}, {len(index)} items)"
+    )
+
+
+def _contact_sheet(paths: list[Path], dest: Path) -> None:
+    """Tile thumbnails (left to right, top to bottom) into one JPEG at `dest`."""
+    from PIL import Image, ImageOps
+
+    cell_w, cell_h = 216, 288
+    columns = _CONTACT_SHEET_COLUMNS
+    rows = max(1, -(-len(paths) // columns))
+    sheet = Image.new("RGB", (columns * cell_w, rows * cell_h), "white")
+    for i, path in enumerate(paths):
+        with Image.open(path) as im:
+            tile = ImageOps.pad(im.convert("RGB"), (cell_w, cell_h), color="white")
+        sheet.paste(tile, ((i % columns) * cell_w, (i // columns) * cell_h))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(dest, format="JPEG", quality=85)
+
+
+@app.command("search-text")
+def search_text(
+    query: Annotated[str, typer.Argument(help="What to look for, in words.")],
+    domain: Annotated[
+        _Domain, typer.Option(help="Which catalog to search.")
+    ] = _Domain.clothes,
+    model: _ModelOption = config.MODEL_NAME,
+    pretrained: _PretrainedOption = config.MODEL_PRETRAINED,
+) -> None:
+    """Show the 12 best matches for a text query as <data dir>/contact_sheet.jpg."""
+    from amber.data.catalog import load_items, thumb_path
+    from amber.space import encoder as encoder_module
+    from amber.space.index import VectorIndex, embed_dir
+
+    encoder = encoder_module.ClipEncoder(model, pretrained)
+    directory = embed_dir(domain.value, encoder, config.DATA_DIR)
+    if not directory.exists():
+        raise _fail(
+            f"No {domain.value} embeddings for {model}/{pretrained}: run `amber embed` first."
+        )
+    index = VectorIndex.load(directory)
+    titles = load_items(domain.value, data_dir=config.DATA_DIR).set_index("id")["title"]
+
+    direction = encoder.embed_texts([query])[0]
+    hits = index.top_k(
+        direction, _CONTACT_SHEET_COLUMNS * _CONTACT_SHEET_ROWS, use_centered=False
+    )
+    for item_id, score in hits:
+        typer.echo(f"{item_id:>8}  {score:.3f}  {titles.get(item_id, '')}")
+    dest = config.DATA_DIR / "contact_sheet.jpg"
+    _contact_sheet([thumb_path(i, data_dir=config.DATA_DIR) for i, _ in hits], dest)
+    typer.echo(f"wrote {dest}")
+
+
+@app.command("shrink-thumbs")
+def shrink_thumbs(
+    domain: Annotated[
+        str,
+        typer.Option(
+            help="Catalog to shrink (only 'clothes': art keeps its aspect ratios)."
+        ),
+    ] = "clothes",
+) -> None:
+    """Re-encode the clothing thumbnails in place at the configured size and quality."""
+    from amber.data.files import THUMB_QUALITY, shrink_thumbnails
+
+    if domain != "clothes":
+        raise _fail("Only the clothes thumbnails can be shrunk.")
+    thumbs = config.DATA_DIR / "clothes" / "thumbs"
+    count = shrink_thumbnails(thumbs, config.THUMB_SIZE, THUMB_QUALITY)
+    typer.echo(f"shrunk {count} thumbnails in {thumbs}")
