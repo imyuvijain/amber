@@ -82,8 +82,9 @@ def art(
         int,
         typer.Option(
             min=1,
-            help="How many artworks to collect, at about 1 request per second "
-            "(the API serves at most 1000 results per search).",
+            help="How many artworks to collect. Each artwork type gets its own search "
+            "(and its own window of results) and they are taken in turns, so the mix "
+            "is balanced. About 1 request per second.",
         ),
     ] = 2000,
 ) -> None:
