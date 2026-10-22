@@ -346,3 +346,26 @@ def bench_active(
     typer.echo("")
     typer.echo(f"coin-flip clicker (active, default prior_var): {chance:.3f}")
     typer.echo(f"took {time.perf_counter() - started:.0f}s")
+
+
+@app.command()
+def serve(
+    port: Annotated[
+        int, typer.Option(min=1, max=65535, help="Port to listen on.")
+    ] = 8000,
+    host: Annotated[str, typer.Option(help="Address to bind.")] = "127.0.0.1",
+) -> None:
+    """Serve the API (and web/dist at / if it has been built)."""
+    import uvicorn  # keep `--help` fast
+
+    from amber.api.app import create_app
+    from amber.context import load_context
+
+    try:
+        context = load_context(config.DATA_DIR)
+    except FileNotFoundError as err:
+        raise _fail(
+            f"Missing data under {config.DATA_DIR} ({err}): run `amber ingest clothes`, "
+            "`amber ingest art` and `amber embed` first."
+        ) from err
+    uvicorn.run(create_app(context), host=host, port=port)
