@@ -10,6 +10,7 @@ export const STEPS: readonly Step[] = [
   { id: 'welcome', label: 'Start' },
   { id: 'describe', label: 'Describe' },
   { id: 'sections', label: 'Sections' },
+  { id: 'art', label: 'Art' },
   { id: 'train', label: 'Pick' },
   { id: 'showdown', label: 'Showdown' },
   { id: 'scoreboard', label: 'Results' },

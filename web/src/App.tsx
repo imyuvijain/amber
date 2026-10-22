@@ -10,10 +10,14 @@ import Welcome from './screens/Welcome'
 import { clearSession, loadStep, loadUserId, saveStep, saveUserId } from './storage'
 import { isStepId, stepAfter } from './steps'
 
+// Art picks come before the clothes picks: same screen, art domain.
+const ArtPick = (props: ScreenProps) => <ThisOrThat {...props} domain="art" />
+
 // One screen per step id in steps.ts. A new step is one entry here and one in STEPS.
 const SCREENS: Record<string, ComponentType<ScreenProps>> = {
   describe: Describe,
   sections: Sections,
+  art: ArtPick,
   train: ThisOrThat,
   showdown: Showdown,
   scoreboard: Scoreboard,

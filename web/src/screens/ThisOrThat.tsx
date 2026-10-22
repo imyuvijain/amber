@@ -10,7 +10,7 @@ const COPY: Record<Domain, { heading: string; hint: string; label: string }> = {
   },
   art: {
     heading: 'Which would you rather hang on your wall?',
-    hint: 'Go with your gut. Pictures only, no titles or artists.',
+    hint: 'These are artworks. Go with your gut: pictures only, no titles or artists.',
     label: 'Artworks picked',
   },
 }
