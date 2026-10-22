@@ -351,13 +351,28 @@ def save_you(
     conn: sqlite3.Connection, user_id: str, name: str, w: np.ndarray | None, meta: dict
 ) -> None:
     """Freeze a You: ``w`` as float32 bytes (None -> NULL), ``meta`` as JSON. Upsert."""
-    blob = None if w is None else np.ascontiguousarray(w, dtype=np.float32).tobytes()
+    save_yous(conn, user_id, {name: (w, meta)})
+
+
+def save_yous(
+    conn: sqlite3.Connection,
+    user_id: str,
+    yous: dict[str, tuple[np.ndarray | None, dict]],
+) -> None:
+    """Freeze several Yous (``name -> (w, meta)``) in one transaction: all rows or none."""
     with conn:
-        conn.execute(
-            "INSERT INTO yous (user_id, name, w, meta) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (user_id, name) DO UPDATE SET w = excluded.w, meta = excluded.meta",
-            (user_id, name, blob, json.dumps(meta)),
-        )
+        for name, (w, meta) in yous.items():
+            blob = (
+                None
+                if w is None
+                else np.ascontiguousarray(w, dtype=np.float32).tobytes()
+            )
+            conn.execute(
+                "INSERT INTO yous (user_id, name, w, meta) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (user_id, name) DO UPDATE SET w = excluded.w, "
+                "meta = excluded.meta",
+                (user_id, name, blob, json.dumps(meta)),
+            )
 
 
 def load_yous(
