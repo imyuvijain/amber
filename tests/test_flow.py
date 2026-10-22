@@ -3,6 +3,8 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from fakes import play_art, play_showdown, play_train
+
 from amber.flow import (
     CatalogExhausted,
     allowed_ids,
@@ -10,8 +12,6 @@ from amber.flow import (
     pair_rng,
     progress,
 )
-from fakes import play_art, play_showdown, play_train
-
 from amber.store.db import (
     answer_pair,
     get_predictions,
@@ -88,11 +88,9 @@ def test_pair_rng_is_stable_and_keyed():
         assert not np.array_equal(a, other.integers(0, 2**32, 4))
 
 
-def test_pair_rng_value_is_pinned_across_processes():
-    # sha256-derived, so this cannot drift with PYTHONHASHSEED
-    assert int(pair_rng("u", "clothes", "train", 0).integers(0, 10**9)) == int(
-        pair_rng("u", "clothes", "train", 0).integers(0, 10**9)
-    )
+def test_pair_rng_value_is_pinned():
+    # sha256-derived, so this cannot drift with PYTHONHASHSEED or between processes
+    assert int(pair_rng("u", "clothes", "train", 0).integers(0, 10**9)) == 751466491
 
 
 def test_explicit_rng_is_used(ctx, user):

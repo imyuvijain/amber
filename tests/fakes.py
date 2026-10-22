@@ -272,7 +272,6 @@ def _play(ctx, user: str, domain: str, phase: str, prefer: str | None, n: int) -
     `next_pair` returns None. Returns the answered `Choice`s in order.
     """
     from amber.flow import next_pair
-
     from amber.prefs.simulate import SimulatedUser
     from amber.store.db import answer_pair
 

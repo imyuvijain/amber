@@ -1,11 +1,11 @@
 import numpy as np
-from amber.yous.revealed import build_revealed, train_preference_model
 from fakes import play_showdown, play_train, red_and_blue_centered
 
 from amber.config import PRIOR_VAR
 from amber.store.db import answer_pair, create_pair, list_choices
 from amber.yous.base import predict
 from amber.yous.registry import BUILDERS
+from amber.yous.revealed import build_revealed, train_preference_model
 
 
 def test_revealed_is_registered():
