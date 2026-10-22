@@ -241,3 +241,17 @@ def build_fixture_data(root: Path) -> Path:
         )
     pd.DataFrame(rows).to_parquet(root / "art" / "items.parquet", index=False)
     return root
+
+
+def red_and_blue_centered(ctx) -> tuple[np.ndarray, np.ndarray]:
+    """Centered vectors `(red, blue)` of one clear-Red and one clear-Blue clothes item.
+
+    Picked by `base_colour` from `ctx.items["clothes"]` (the first of each), then looked up
+    in `ctx.index["clothes"]`. `ctx` is an `AppContext`; it is not imported here so this
+    module stays free of app imports beyond `amber.config`.
+    """
+    items = ctx.items["clothes"]
+    red_id = items.loc[items["base_colour"] == "Red", "id"].iloc[0]
+    blue_id = items.loc[items["base_colour"] == "Blue", "id"].iloc[0]
+    red, blue = ctx.index["clothes"].centered([red_id, blue_id])
+    return red, blue
