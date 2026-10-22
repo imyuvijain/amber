@@ -168,7 +168,7 @@ docs/results/          measured results that get committed (space.md, bench.md)
     - `clothes/`: 96 solid-color JPEGs plus `items.parquet` (same columns as Task 2), 24 for each combination of gender (`Men`, `Women`) × section (`Apparel`, `Footwear`)
     - `art/`: 24 solid-color JPEGs plus `items.parquet` (same columns as Task 3)
 
-- [ ] **Step 1: Install uv and create the project**
+- [x] **Step 1: Install uv and create the project**
 
 Run: `brew install uv && uv python install 3.12`
 Expected: `uv --version` prints a version.
@@ -183,7 +183,7 @@ Write `pyproject.toml`:
 
 `.gitignore` covers: `data/`, `.venv/`, `node_modules/`, `web/dist/`, `.env`, `.claude/settings.local.json`, `__pycache__/`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/test_config.py
@@ -213,19 +213,19 @@ def test_fake_encoder_colors(fake_encoder, fixture_data):
     ...  # pick a red and a blue thumbnail from fixture_data/"clothes"; assert dot(red_img, t_red) > dot(blue_img, t_red)
 ```
 
-- [ ] **Step 3: Run the tests and confirm they fail**
+- [x] **Step 3: Run the tests and confirm they fail**
 
 Run: `uv run pytest -q`
 Expected: FAIL (`amber.config` missing).
 
-- [ ] **Step 4: Implement `config.py`, `cli.py` (an empty Typer `app`), and the `FakeEncoder` and `fixture_data` fixtures in `tests/conftest.py`**
+- [x] **Step 4: Implement `config.py`, `cli.py` (an empty Typer `app`), and the `FakeEncoder` and `fixture_data` fixtures in `tests/conftest.py`**
 
-- [ ] **Step 5: Run the tests and lint**
+- [x] **Step 5: Run the tests and lint**
 
 Run: `uv run pytest -q && uv run ruff check .`
 Expected: PASS, no lint errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pyproject.toml .python-version .gitignore src tests uv.lock
