@@ -61,17 +61,18 @@ def test_fake_encoder_is_stable_across_processes(fixture_data):
         "print(e.embed_texts(['hello'])[0].tolist(), e.embed_images([sys.argv[2]])[0].tolist())\n"
     )
     thumb = _thumb(fixture_data, "clothes", "Red")
-    outs = {
-        subprocess.run(
+    procs = [  # run both at once to keep the test quick
+        subprocess.Popen(
             [sys.executable, "-c", code, str(Path(__file__).parent), str(thumb)],
             env={**os.environ, "PYTHONHASHSEED": seed},
-            capture_output=True,
+            stdout=subprocess.PIPE,
             text=True,
-            check=True,
-        ).stdout
+        )
         for seed in ("1", "2")
-    }
-    assert len(outs) == 1
+    ]
+    outs = {proc.communicate()[0] for proc in procs}
+    assert all(proc.returncode == 0 for proc in procs)
+    assert len(outs) == 1 and outs != {""}
 
 
 def test_fake_encoder_colors(fake_encoder, fixture_data):
