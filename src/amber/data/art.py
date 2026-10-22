@@ -1,8 +1,11 @@
 """Fetch public-domain artworks from the Art Institute of Chicago into thumbnails +
 `items.parquet`.
 
-Search results are paged through (100 per page, most prominent works first) until `n`
-artworks have a saved thumbnail. Every request, search or image, is spaced at least
+One search per artwork type is paged through (100 per page, most prominent works first)
+and the results are taken round-robin across the types, until `n` artworks have a saved
+thumbnail. A single search reaches only its first 1000 results and the most prominent
+ones are nearly all paintings, so one query per type gives both a larger reachable pool
+and a balanced mix. Every request, search or image, is spaced at least
 `min_interval` seconds from the one before and carries `AIC_HEADERS`, as the AIC asks of
 API users. The run is resumable like the clothes ingest: an artwork whose thumbnail
 already exists is not downloaded again, but its metadata is still collected.
@@ -11,7 +14,7 @@ already exists is not downloaded again, but its metadata is still collected.
 import io
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +44,8 @@ FIELDS = [
 ]
 PAGE_SIZE = 100
 # A search reaches only its first 1000 results: page 11 at 100 per page, or page 21 at 50,
-# is answered 403 "Invalid number of results" (checked against the live API).
+# is answered 403 "Invalid number of results" (checked against the live API). Each
+# artwork type is its own search, so each has its own window.
 MAX_RESULTS = 1000
 ART_THUMB_SIDE = 384  # longest side in pixels; the aspect ratio is kept
 
@@ -54,15 +58,15 @@ COLUMNS = ["id", "title", "artist", "date", "artwork_type"]
 _HEADERS = {**AIC_HEADERS, "User-Agent": USER_AGENT}
 
 
-def _search_body(page: int) -> dict:
+def _search_body(art_type: str, page: int) -> dict:
     return {
         "query": {
             "bool": {
                 "filter": [
                     {"term": {"is_public_domain": True}},
-                    # `.keyword`: the plain field is analysed text, so `terms` on it
-                    # matches nothing (checked against the live API)
-                    {"terms": {"artwork_type_title.keyword": list(KEEP_ART_TYPES)}},
+                    # `.keyword`: the plain field is analysed text, so matching on it
+                    # finds nothing (checked against the live API)
+                    {"term": {"artwork_type_title.keyword": art_type}},
                     {"exists": {"field": "image_id"}},
                 ]
             }
@@ -108,10 +112,11 @@ class _Fetcher:
         raise AssertionError("unreachable")  # pragma: no cover
 
 
-def _search_results(fetcher: _Fetcher) -> Iterator[dict]:
-    """Artworks from successive search pages, fetching a page only when asked for more."""
+def _type_results(fetcher: _Fetcher, art_type: str) -> Iterator[dict]:
+    """Artworks of one type from successive search pages, fetching a page only when asked
+    for more than the pages so far held."""
     for page in range(1, MAX_RESULTS // PAGE_SIZE + 1):
-        response = fetcher.send("POST", SEARCH_URL, json=_search_body(page))
+        response = fetcher.send("POST", SEARCH_URL, json=_search_body(art_type, page))
         response.raise_for_status()
         payload = response.json()
         results = payload.get("data") or []
@@ -121,7 +126,22 @@ def _search_results(fetcher: _Fetcher) -> Iterator[dict]:
             total_pages is not None and page >= total_pages
         ):
             return
-    logger.warning("stopped at the API's limit of %d results per search", MAX_RESULTS)
+    logger.warning(
+        "stopped at the API's limit of %d results for %s", MAX_RESULTS, art_type
+    )
+
+
+def _search_results(fetcher: _Fetcher, art_types: Sequence[str]) -> Iterator[dict]:
+    """One artwork from each type in turn, then the next from each, and so on; a type
+    drops out once it has no more. A type is first searched when its turn first comes."""
+    streams = [_type_results(fetcher, art_type) for art_type in art_types]
+    while streams:
+        for stream in list(streams):
+            artwork = next(stream, None)
+            if artwork is None:
+                streams.remove(stream)
+            else:
+                yield artwork
 
 
 def _thumbnail(data: bytes) -> Image.Image:
@@ -152,8 +172,9 @@ def ingest_art(
     """Build `out_dir/items.parquet` and `out_dir/thumbs/<aic_id>.jpg`; return the table.
 
     Collects `n` public-domain artworks of the `KEEP_ART_TYPES` that have a saved
-    thumbnail, paging through the search results (the API serves only the first
-    `MAX_RESULTS` of them, so that is also the most `n` can reach); an image that fails (404, server
+    thumbnail. Each type is searched separately (the API serves only the first
+    `MAX_RESULTS` of a search) and taken in turns, so the mix is as even as the pools
+    allow and a type with fewer artworks just contributes fewer; an image that fails (404, server
     error, undecodable) is logged and skipped and the next result takes its place. Stops
     early when the results run out, and aborts with a RuntimeError after
     `MAX_CONSECUTIVE_FAILURES` unusable images in a row (something systematic is wrong).
@@ -165,12 +186,14 @@ def ingest_art(
     """
     if n < 1:
         raise ValueError("n must be a positive number of artworks")
-    if n > MAX_RESULTS:
+    reachable = len(KEEP_ART_TYPES) * MAX_RESULTS
+    if n > reachable:
         logger.warning(
-            "n=%d is more than the %d results one search can page through; "
-            "collecting at most that many",
+            "n=%d is more than the %d results the %d per-type searches can page "
+            "through; collecting at most that many",
             n,
-            MAX_RESULTS,
+            reachable,
+            len(KEEP_ART_TYPES),
         )
     out_dir = Path(out_dir)
     thumbs = out_dir / "thumbs"
@@ -186,7 +209,7 @@ def ingest_art(
     skipped = 0
     failures_in_a_row = 0
     try:
-        for artwork in _search_results(fetcher):
+        for artwork in _search_results(fetcher, KEEP_ART_TYPES):
             try:
                 art_id = int(artwork["id"])
             except (KeyError, TypeError, ValueError):
