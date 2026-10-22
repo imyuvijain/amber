@@ -1,0 +1,82 @@
+.welcome {
+  display: grid;
+  gap: 1.75rem;
+  max-width: 46rem;
+}
+
+.lineup {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: grid;
+  border-top: 1.5px solid var(--ink);
+}
+
+.lineup li {
+  display: grid;
+  grid-template-columns: auto 10rem 1fr;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+  animation: drop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation-delay: calc(var(--i) * 110ms + 150ms);
+}
+
+.lineup .bead {
+  --size: 1.15rem;
+}
+
+.lineup-name {
+  font-weight: 650;
+}
+
+.lineup-pitch {
+  color: var(--muted);
+}
+
+/* The one orchestrated moment: the five beads drop into place, once. */
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-1.25rem);
+  }
+}
+
+.start {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.start label {
+  font-weight: 600;
+}
+
+.start-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.start-row input {
+  flex: 1 1 14rem;
+  min-height: 3rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+}
+
+.start-row input:focus-visible {
+  border-color: var(--focus);
+}
+
+@media (max-width: 40rem) {
+  .lineup li {
+    grid-template-columns: auto 1fr;
+  }
+  .lineup-pitch {
+    grid-column: 2;
+    margin-top: -0.6rem;
+  }
+}
