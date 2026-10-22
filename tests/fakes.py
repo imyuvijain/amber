@@ -255,3 +255,55 @@ def red_and_blue_centered(ctx) -> tuple[np.ndarray, np.ndarray]:
     blue_id = items.loc[items["base_colour"] == "Blue", "id"].iloc[0]
     red, blue = ctx.index["clothes"].centered([red_id, blue_id])
     return red, blue
+
+
+# --- play helpers: drive the pair flow like a (simulated) person ----------------------
+
+_PLAY_TEMPERATURE = 0.05
+_PREFER_DIMS = {"red": 0, "blue": 2}
+
+
+def _play(ctx, user: str, domain: str, phase: str, prefer: str | None, n: int) -> list:
+    """Answer up to `n` pairs of (`domain`, `phase`) via `next_pair`/`answer_pair`.
+
+    The chooser is a `SimulatedUser` whose `w` is the unit vector on the colour dim of
+    `prefer` ("red" is dim 0, "blue" is dim 2) applied to the items' centered vectors, with
+    a small temperature and a seeded rng; `prefer=None` is a coin flip. Stops early if
+    `next_pair` returns None. Returns the answered `Choice`s in order.
+    """
+    from amber.flow import next_pair
+
+    from amber.prefs.simulate import SimulatedUser
+    from amber.store.db import answer_pair
+
+    if prefer is not None and prefer not in _PREFER_DIMS:
+        raise ValueError(f"prefer must be None, 'red' or 'blue', got {prefer!r}")
+    w = None
+    if prefer is not None:
+        w = np.zeros(ctx.index[domain].vectors.shape[1])
+        w[_PREFER_DIMS[prefer]] = 1.0
+    sim = SimulatedUser(w, _PLAY_TEMPERATURE, np.random.default_rng(SEED))
+    answered = []
+    for _ in range(n):
+        pair = next_pair(ctx.conn, user, domain, phase, ctx)
+        if pair is None:
+            break
+        a, b = ctx.index[domain].centered([pair.a_id, pair.b_id])
+        picked = (pair.a_id, pair.b_id)[sim.choose(a, b)]
+        answered.append(answer_pair(ctx.conn, pair.pair_id, picked))
+    return answered
+
+
+def play_train(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
+    """Answer `n` clothes train pairs; returns the answered `Choice`s."""
+    return _play(ctx, user, "clothes", "train", prefer, n)
+
+
+def play_showdown(ctx, user: str, prefer: str | None = None, n: int = 3) -> list:
+    """Answer `n` clothes showdown pairs (the first call freezes the Yous)."""
+    return _play(ctx, user, "clothes", "showdown", prefer, n)
+
+
+def play_art(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
+    """Answer `n` art train pairs."""
+    return _play(ctx, user, "art", "train", prefer, n)
