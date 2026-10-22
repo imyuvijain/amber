@@ -376,3 +376,40 @@ def test_serves_the_built_web_app_when_it_exists(ctx, tmp_path, monkeypatch):
 def test_no_web_dist_means_no_root_page(ctx, tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "WEB_DIST", tmp_path / "missing")
     assert TestClient(create_app(ctx)).get("/").status_code == 404
+
+
+# --- one scored clothing phase ----------------------------------------------------
+
+
+def _finish_art(client, uid):
+    _play(client, uid, "train", domain="art")
+
+
+def test_clothes_showdown_waits_for_the_art_phase(client):
+    uid = _new_user(client, **MEN_APPAREL)
+    r = _next(client, uid, phase="showdown")
+    assert r.status_code == 409 and "art" in r.json()["detail"]
+    _finish_art(client, uid)
+    assert _next(client, uid, phase="showdown").status_code == 200
+
+
+def test_clothes_train_is_a_422(client):
+    uid = _new_user(client, **MEN_APPAREL)
+    assert _next(client, uid, phase="train").status_code == 422
+
+
+def test_results_route_shape(client, ctx):
+    uid = _new_user(client, **MEN_APPAREL)
+    _finish_art(client, uid)
+    n = ctx.settings.clothes_pairs
+    assert len(_play(client, uid, "showdown")) == n
+    res = client.get(f"/api/users/{uid}/results").json()
+    assert set(res) == {"scores_all", "scores_late", "curves", "n_clothes"}
+    assert res["n_clothes"] == n
+    assert {s["you"] for s in res["scores_all"]} >= {"stated", "art", "revealed"}
+    for s in res["scores_all"]:
+        assert set(s) == {"you", "correct", "n", "accuracy", "ci_low", "ci_high"}
+        assert s["n"] == n
+    assert all(s["n"] == n - n // 2 for s in res["scores_late"])
+    assert set(res["curves"]) == {s["you"] for s in res["scores_all"]}
+    assert all(len(c) == n for c in res["curves"].values())

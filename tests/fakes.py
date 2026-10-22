@@ -298,6 +298,39 @@ def play_train(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
     return _play(ctx, user, "clothes", "train", prefer, n)
 
 
+def play_clothes(ctx, user: str, prefer: str | None = None, n: int = 6) -> list:
+    """Answer `n` scored clothes pairs (phase `showdown`); the first call freezes the Yous."""
+    return _play(ctx, user, "clothes", "showdown", prefer, n)
+
+
+def preds(ctx, choices: list) -> dict[str, dict[str, float]]:
+    """`{pair_id: {you: P(a)}}` for the given choices, as `score_showdown` wants them."""
+    from amber.store.db import get_predictions
+
+    return {c.pair_id: get_predictions(ctx.conn, c.pair_id) for c in choices}
+
+
+def revealed_p_a_from(earlier: list, pair, ctx) -> float:
+    """Independent replay of Revealed's `P(a)` for `pair` from the `earlier` answered picks.
+
+    Written against `PreferenceModel` directly (not `revealed_p_a`): 0.5 under 5 picks,
+    otherwise a fresh model updated in order, then `p_prefer` on the basis projections.
+    """
+    from amber.prefs.model import PreferenceModel
+
+    answered = [c for c in earlier if c.chosen_id is not None]
+    if len(answered) < 5:
+        return 0.5
+    index, basis = ctx.index["clothes"], ctx.basis["clothes"]
+    model = PreferenceModel(basis.components.shape[0])
+    for c in answered:
+        loser = c.b_id if c.chosen_id == c.a_id else c.a_id
+        win, lose = basis.project(index.centered([c.chosen_id, loser]))
+        model.update(win, lose)
+    a, b = basis.project(index.centered([pair.a_id, pair.b_id]))
+    return model.p_prefer(a, b)
+
+
 def play_showdown(ctx, user: str, prefer: str | None = None, n: int = 3) -> list:
     """Answer `n` clothes showdown pairs (the first call freezes the Yous)."""
     return _play(ctx, user, "clothes", "showdown", prefer, n)
