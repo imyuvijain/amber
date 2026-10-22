@@ -143,3 +143,147 @@ def get_answers(conn: sqlite3.Connection, user_id: str, kind: str) -> dict[str, 
         "SELECT key, value FROM answers WHERE user_id = ? AND kind = ?", (user_id, kind)
     )
     return {key: value for key, value in rows}
+
+
+# --- pairs -------------------------------------------------------------------
+
+_PAIR_COLS = "pair_id, user_id, domain, phase, a_id, b_id, chosen_id, shown_at, answered_at, retest_of"
+
+
+def _choice(row: tuple) -> Choice:
+    (
+        pair_id,
+        user_id,
+        domain,
+        phase,
+        a_id,
+        b_id,
+        chosen_id,
+        shown_at,
+        answered_at,
+        retest_of,
+    ) = row
+    return Choice(
+        pair_id=pair_id,
+        user_id=user_id,
+        domain=domain,
+        phase=phase,
+        a_id=a_id,
+        b_id=b_id,
+        chosen_id=chosen_id,
+        shown_at=datetime.fromisoformat(shown_at),
+        answered_at=None
+        if answered_at is None
+        else datetime.fromisoformat(answered_at),
+        retest_of=retest_of,
+    )
+
+
+def _get_pair(conn: sqlite3.Connection, pair_id: str) -> Choice:
+    row = conn.execute(
+        f"SELECT {_PAIR_COLS} FROM pairs WHERE pair_id = ?", (pair_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFound(f"no such pair: {pair_id}")
+    return _choice(row)
+
+
+def create_pair(
+    conn: sqlite3.Connection,
+    user_id: str,
+    domain: Domain,
+    phase: Phase,
+    a_id: str,
+    b_id: str,
+    retest_of: str | None = None,
+    now: datetime | None = None,
+) -> Choice:
+    pair_id = uuid.uuid4().hex
+    with conn:
+        conn.execute(
+            f"INSERT INTO pairs ({_PAIR_COLS}) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?)",
+            (pair_id, user_id, domain, phase, a_id, b_id, _iso(_utc(now)), retest_of),
+        )
+    return _get_pair(conn, pair_id)
+
+
+def answer_pair(
+    conn: sqlite3.Connection, pair_id: str, chosen_id: str, now: datetime | None = None
+) -> Choice:
+    """Record the pick. Idempotent for the same ``chosen_id``.
+
+    Order of checks: unknown pair, chosen not in pair, already answered
+    (same id returns the stored Choice, a different id raises), then the
+    showdown prediction gate.
+    """
+    with conn:
+        pair = _get_pair(conn, pair_id)
+        if chosen_id not in (pair.a_id, pair.b_id):
+            raise ValueError(f"{chosen_id!r} is not in pair {pair_id}")
+        if pair.chosen_id is not None:
+            if pair.chosen_id == chosen_id:
+                return pair
+            raise AlreadyAnswered(
+                f"pair {pair_id} already answered with {pair.chosen_id!r}"
+            )
+        if pair.phase == "showdown":
+            n = conn.execute(
+                "SELECT COUNT(*) FROM predictions WHERE pair_id = ?", (pair_id,)
+            ).fetchone()[0]
+            if n == 0:
+                raise MissingPredictions(
+                    f"showdown pair {pair_id} has no saved predictions"
+                )
+        conn.execute(
+            "UPDATE pairs SET chosen_id = ?, answered_at = ? "
+            "WHERE pair_id = ? AND chosen_id IS NULL",
+            (chosen_id, _iso(_utc(now)), pair_id),
+        )
+    return _get_pair(conn, pair_id)
+
+
+def open_pair(
+    conn: sqlite3.Connection, user_id: str, domain: str, phase: str
+) -> Choice | None:
+    """The most recent unanswered pair for this user/domain/phase, if any."""
+    row = conn.execute(
+        f"SELECT {_PAIR_COLS} FROM pairs "
+        "WHERE user_id = ? AND domain = ? AND phase = ? AND chosen_id IS NULL "
+        "ORDER BY shown_at DESC, rowid DESC LIMIT 1",
+        (user_id, domain, phase),
+    ).fetchone()
+    return None if row is None else _choice(row)
+
+
+def list_choices(
+    conn: sqlite3.Connection,
+    user_id: str,
+    domain: str | None = None,
+    phase: str | None = None,
+    answered_only: bool = True,
+) -> list[Choice]:
+    """A user's pairs, oldest first (by shown_at, then insertion order)."""
+    where, args = ["user_id = ?"], [user_id]
+    if domain is not None:
+        where.append("domain = ?")
+        args.append(domain)
+    if phase is not None:
+        where.append("phase = ?")
+        args.append(phase)
+    if answered_only:
+        where.append("chosen_id IS NOT NULL")
+    rows = conn.execute(
+        f"SELECT {_PAIR_COLS} FROM pairs WHERE {' AND '.join(where)} "
+        "ORDER BY shown_at ASC, rowid ASC",
+        args,
+    )
+    return [_choice(r) for r in rows]
+
+
+def shown_ids(conn: sqlite3.Connection, user_id: str, domain: str) -> set[str]:
+    """Every item id this user has been shown in this domain, any phase, answered or not."""
+    rows = conn.execute(
+        "SELECT a_id, b_id FROM pairs WHERE user_id = ? AND domain = ?",
+        (user_id, domain),
+    )
+    return {item for row in rows for item in row}
