@@ -2,13 +2,13 @@
 shrink-thumbs. The real CLIP model is swapped for the model-free FakeEncoder."""
 
 import pytest
+from conftest import FakeEncoder
 from PIL import Image
 from typer.testing import CliRunner
 
 from amber import config
 from amber.cli import app
 from amber.space.index import VectorIndex, embed_dir
-from conftest import FakeEncoder
 
 
 @pytest.fixture
@@ -88,9 +88,9 @@ def test_search_text_writes_a_contact_sheet_of_the_best_matches(
     assert result.exit_code == 0, result.output
     sheet = fixture_data / "contact_sheet.jpg"
     with Image.open(sheet) as im:
-        assert im.format == "JPEG" and im.width > im.height > 0
+        assert im.format == "JPEG" and im.size == (4 * 216, 3 * 288)
     # FakeEncoder points "red" along dim 0: the top hit is one of the clear reds
-    first = [line for line in result.output.splitlines() if "c:" in line][0]
+    first = next(line for line in result.output.splitlines() if "c:" in line)
     assert "Red" in first
 
 
