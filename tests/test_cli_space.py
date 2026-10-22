@@ -121,3 +121,28 @@ def test_shrink_thumbs_shrinks_clothes_in_place(monkeypatch, fixture_data):
     assert "96" in result.output
     again = CliRunner().invoke(app, ["shrink-thumbs", "--domain", "clothes"])
     assert again.exit_code == 0 and "0" in again.output
+
+
+def test_bench_active_prints_the_strategy_table(fake_clip, fixture_data):
+    assert (
+        CliRunner()
+        .invoke(app, ["embed", "--model", "fake", "--pretrained", "fixture"])
+        .exit_code
+        == 0
+    )
+    args = ["bench-active", "--model", "fake", "--pretrained", "fixture"]
+    args += ["--n-users", "2", "--n-train", "5", "--n-test", "10"]
+    result = CliRunner().invoke(app, args)
+    assert result.exit_code == 0, result.output
+    rows = [line for line in result.output.splitlines() if line.startswith("| 0.")]
+    assert len(rows) == 6  # temperature {0.05, 0.2} x prior_var {0.1, 1, 10}
+    for row in rows:
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        assert all(0.0 <= float(c) <= 1.0 for c in cells[2:4])
+    assert "coin-flip" in result.output
+
+
+def test_bench_active_without_embeddings_says_what_to_run(fake_clip):
+    result = CliRunner().invoke(app, ["bench-active", "--n-users", "1"])
+    assert result.exit_code == 1
+    assert "amber embed" in result.output
