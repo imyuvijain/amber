@@ -5,6 +5,7 @@ microsecond precision so they round-trip exactly and sort lexically.
 """
 
 import json
+import math
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -218,6 +219,10 @@ def answer_pair(
     Order of checks: unknown pair, chosen not in pair, already answered
     (same id returns the stored Choice, a different id raises), then the
     showdown prediction gate.
+
+    The gate only checks that *some* predictions exist for a showdown pair;
+    the store does not know the full set of Yous. The caller must save every
+    You's prediction in a single ``save_predictions`` call before answering.
     """
     with conn:
         pair = _get_pair(conn, pair_id)
@@ -237,11 +242,18 @@ def answer_pair(
                 raise MissingPredictions(
                     f"showdown pair {pair_id} has no saved predictions"
                 )
-        conn.execute(
+        cur = conn.execute(
             "UPDATE pairs SET chosen_id = ?, answered_at = ? "
             "WHERE pair_id = ? AND chosen_id IS NULL",
             (chosen_id, _iso(_utc(now)), pair_id),
         )
+        if cur.rowcount == 0:  # someone answered between our read and the write
+            winner = _get_pair(conn, pair_id)
+            if winner.chosen_id == chosen_id:
+                return winner
+            raise AlreadyAnswered(
+                f"pair {pair_id} already answered with {winner.chosen_id!r}"
+            )
     return _get_pair(conn, pair_id)
 
 
@@ -301,10 +313,22 @@ def save_predictions(
     preds: dict[str, float],
     now: datetime | None = None,
 ) -> None:
-    """Save each You's P(a) for a pair (upsert per You). Unknown pair raises NotFound."""
+    """Save each You's P(a) for a pair (upsert per You), before the pair is answered.
+
+    Call this once with *all* Yous' predictions: ``answer_pair`` only checks
+    that at least one prediction exists for a showdown pair. Raises NotFound
+    for an unknown pair, ValueError for a non-finite or out-of-[0, 1] p_a, and
+    AlreadyAnswered if the pair was already answered (predictions are frozen
+    once the answer is in).
+    """
     created = _iso(_utc(now))
     with conn:
-        _get_pair(conn, pair_id)
+        pair = _get_pair(conn, pair_id)
+        for you, p in preds.items():
+            if not math.isfinite(p) or not 0.0 <= p <= 1.0:
+                raise ValueError(f"prediction for {you!r} must be in [0, 1], got {p!r}")
+        if pair.chosen_id is not None:
+            raise AlreadyAnswered(f"pair {pair_id} is answered; predictions are frozen")
         conn.executemany(
             "INSERT INTO predictions (pair_id, you, p_a, created_at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT (pair_id, you) DO UPDATE SET p_a = excluded.p_a, "
