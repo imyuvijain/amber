@@ -667,6 +667,68 @@ def test_network_failure_that_persists_stops_the_run(tmp_path, aic, mock_client)
     assert list(pd.read_parquet(tmp_path / "items.parquet").id) == ["a:1"]
 
 
+@pytest.mark.parametrize(
+    "timeout", [httpx.ReadTimeout("timed out"), httpx.ConnectTimeout("timed out")]
+)
+def test_an_image_that_keeps_timing_out_is_skipped_not_fatal(tmp_path, caplog, timeout):
+    # Result order is deterministic and a skipped image never gets a thumbnail, so if
+    # one stuck image ended the run, every rerun would end at the same image.
+    aic = _many(3)
+
+    def stuck(request):
+        if "/img-2/" in request.url.path:
+            raise timeout
+
+    aic.faults.append(stuck)
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        df = ingest_art(tmp_path, n=3, client=aic.client(), min_interval=0)
+    assert df.id.tolist() == ["a:1", "a:3"]
+    assert sum("/img-2/" in r.url.path for r in aic.image_requests) == art.ATTEMPTS
+    assert any("a:2" in r.getMessage() for r in caplog.records)
+    assert not (tmp_path / "thumbs" / "2.jpg").exists()
+
+    # and the next run is not stuck on it: it retries a:2 once more, the rest is resumed
+    aic.faults.clear()
+    aic.requests.clear()
+    assert ingest_art(
+        tmp_path, n=3, client=aic.client(), min_interval=0
+    ).id.tolist() == [
+        "a:1",
+        "a:2",
+        "a:3",
+    ]
+    assert [r.url.path for r in aic.image_requests] == [
+        "/iiif/2/img-2/full/843,/0/default.jpg"
+    ]
+
+
+def test_image_timeouts_count_towards_the_failure_streak(tmp_path, monkeypatch):
+    monkeypatch.setattr(art, "MAX_CONSECUTIVE_FAILURES", 3)
+    aic = _many(10)
+
+    def everything_times_out(request):
+        if request.url.path != SEARCH_PATH:
+            raise httpx.ReadTimeout("timed out")
+
+    aic.faults.append(everything_times_out)
+    with pytest.raises(RuntimeError, match="3 images in a row"):
+        ingest_art(tmp_path, n=10, client=aic.client(), min_interval=0)
+    assert len(aic.image_requests) == 3 * art.ATTEMPTS  # three images, all attempts
+
+
+def test_a_search_that_keeps_timing_out_is_still_fatal(tmp_path):
+    aic = _many(3)
+
+    def search_times_out(request):
+        if request.url.path == SEARCH_PATH:
+            raise httpx.ReadTimeout("timed out")
+
+    aic.faults.append(search_times_out)
+    with pytest.raises(httpx.ReadTimeout):
+        ingest_art(tmp_path, n=3, client=aic.client(), min_interval=0)
+    assert len(aic.searches) == art.ATTEMPTS
+
+
 # --- resume ------------------------------------------------------------------------
 
 
