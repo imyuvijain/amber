@@ -3,6 +3,7 @@ import itertools
 import json
 import logging
 import re
+from collections import Counter
 
 import httpx
 import pandas as pd
@@ -37,11 +38,24 @@ def _artwork(art_id, kind="Painting", **overrides):
     return record
 
 
+TYPE_FIELD = "artwork_type_title.keyword"
+
+
+def searched_type(request):
+    """The one artwork type a search request asks for (`term` on the `.keyword` field)."""
+    filters = json.loads(request.content)["query"]["bool"]["filter"]
+    (kind,) = [
+        f["term"][TYPE_FIELD] for f in filters if TYPE_FIELD in f.get("term", {})
+    ]
+    return kind
+
+
 class FakeAIC:
     """A stand-in for api.artic.edu + the IIIF image server behind `httpx.MockTransport`.
 
-    `artworks` are served 100 (or whatever `limit` the request asks for) at a time, in
-    order; `images` maps image_id -> JPEG bytes and anything else is a 404. `faults` are
+    A search is answered for the one artwork type it filters on: the `artworks` of that
+    type, served 100 (or whatever `limit` the request asks for) at a time, in order.
+    `images` maps image_id -> JPEG bytes and anything else is a 404. `faults` are
     callables `(request) -> Response | None` tried first, to script failures.
     """
 
@@ -55,6 +69,17 @@ class FakeAIC:
     @property
     def searches(self):
         return [r for r in self.requests if r.url.path == SEARCH_PATH]
+
+    def searches_for(self, kind):
+        return [r for r in self.searches if searched_type(r) == kind]
+
+    def pages_for(self, kind):
+        return [json.loads(r.content)["page"] for r in self.searches_for(kind)]
+
+    def pool(self, request):
+        """What a search request is entitled to: artworks of the type it filters on."""
+        kind = searched_type(request)
+        return [a for a in self.artworks if a["artwork_type_title"] == kind]
 
     @property
     def image_requests(self):
@@ -79,10 +104,11 @@ class FakeAIC:
                         "detail": "You have requested too many results.",
                     },
                 )
-            chunk = self.artworks[(page - 1) * limit : page * limit]
-            pages = -(-len(self.artworks) // limit)
+            pool = self.pool(request)
+            chunk = pool[(page - 1) * limit : page * limit]
+            pages = -(-len(pool) // limit)
             pagination = {
-                "total": len(self.artworks),
+                "total": len(pool),
                 "limit": limit,
                 "total_pages": pages,
                 "current_page": page,
@@ -128,6 +154,19 @@ def _many(count, size=(400, 300), **kwargs):
     return FakeAIC(artworks, {f"img-{i}": image for i in range(1, count + 1)})
 
 
+def _by_type(counts, size=(400, 300)):
+    """`counts` maps artwork type -> how many artworks it has. Ids are 100 * (the type's
+    position in KEEP_ART_TYPES + 1) + k: Painting 101, 102, ...; Photograph 201, ..."""
+    artworks = []
+    for position, kind in enumerate(KEEP_ART_TYPES, start=1):
+        artworks += [
+            _artwork(100 * position + k, kind)
+            for k in range(1, counts.get(kind, 0) + 1)
+        ]
+    image = _jpeg(size)
+    return FakeAIC(artworks, {a["image_id"]: image for a in artworks})
+
+
 class FakeClock:
     """Replaces `art.time`: sleeping advances the clock instantly."""
 
@@ -155,7 +194,7 @@ def test_ingest_art_filters_and_prefixes(tmp_path, mock_client):
 
 def test_ingest_art_sends_user_agent(tmp_path, mock_client, seen_requests):
     ingest_art(tmp_path, n=3, client=mock_client, min_interval=0)
-    assert len(seen_requests) == 4  # one search + three images
+    assert len(seen_requests) == 4 + 3  # a search per artwork type + three images
     assert all(r.headers["AIC-User-Agent"].startswith("amber") for r in seen_requests)
 
 
@@ -174,33 +213,34 @@ def test_constants():
     }
 
 
-def test_search_asks_for_public_domain_kept_types_with_images(
+def test_each_artwork_type_gets_its_own_search_with_the_same_filters(
     tmp_path, aic, mock_client
 ):
     ingest_art(tmp_path, n=3, client=mock_client, min_interval=0)
-    (search,) = aic.searches
-    assert str(search.url) == "https://api.artic.edu/api/v1/artworks/search"
-    body = json.loads(search.content)
-    assert body["limit"] == 100 and body["page"] == 1
-    assert body["fields"] == [
-        "id",
-        "title",
-        "artist_title",
-        "date_display",
-        "artwork_type_title",
-        "image_id",
-    ]
-    # `.keyword`: the plain field is analysed text and matches nothing (checked live)
-    assert body["query"]["bool"]["filter"] == [
-        {"term": {"is_public_domain": True}},
-        {"terms": {"artwork_type_title.keyword": list(KEEP_ART_TYPES)}},
-        {"exists": {"field": "image_id"}},
-    ]
+    assert [searched_type(r) for r in aic.searches] == list(KEEP_ART_TYPES)
+    for search in aic.searches:
+        assert str(search.url) == "https://api.artic.edu/api/v1/artworks/search"
+        body = json.loads(search.content)
+        assert body["limit"] == 100 and body["page"] == 1
+        assert body["fields"] == [
+            "id",
+            "title",
+            "artist_title",
+            "date_display",
+            "artwork_type_title",
+            "image_id",
+        ]
+        # `.keyword`: the plain field is analysed text and matches nothing (checked live)
+        assert body["query"]["bool"]["filter"] == [
+            {"term": {"is_public_domain": True}},
+            {"term": {TYPE_FIELD: searched_type(search)}},
+            {"exists": {"field": "image_id"}},
+        ]
 
 
 def test_images_come_from_the_iiif_server_at_843_wide(tmp_path, aic, mock_client):
     ingest_art(tmp_path, n=3, client=mock_client, min_interval=0)
-    assert [str(r.url) for r in aic.image_requests] == [
+    assert sorted(str(r.url) for r in aic.image_requests) == [
         f"https://www.artic.edu/iiif/2/img-{i}/full/843,/0/default.jpg"
         for i in (1, 2, 3)
     ]
@@ -301,8 +341,7 @@ def test_pages_through_results_until_n_thumbnails_are_collected(tmp_path, monkey
     aic = _many(7)
     df = ingest_art(tmp_path, n=5, client=aic.client(), min_interval=0)
     assert df.id.tolist() == [f"a:{i}" for i in range(1, 6)]
-    pages = [json.loads(r.content)["page"] for r in aic.searches]
-    assert pages == [1, 2, 3]  # stops once n is reached: no page 4 fetched
+    assert aic.pages_for("Painting") == [1, 2, 3]  # stops at n: no page 4 fetched
     assert len(aic.image_requests) == 5  # and no sixth image either
 
 
@@ -311,7 +350,7 @@ def test_stops_when_the_results_run_out(tmp_path, monkeypatch):
     aic = _many(4)  # exactly two full pages
     df = ingest_art(tmp_path, n=50, client=aic.client(), min_interval=0)
     assert len(df) == 4
-    assert [json.loads(r.content)["page"] for r in aic.searches] == [1, 2]
+    assert aic.pages_for("Painting") == [1, 2]
 
 
 def test_stops_after_a_short_page_even_without_pagination_info(tmp_path, monkeypatch):
@@ -322,13 +361,13 @@ def test_stops_after_a_short_page_even_without_pagination_info(tmp_path, monkeyp
         if request.url.path == SEARCH_PATH:
             page = json.loads(request.content)["page"]
             return httpx.Response(
-                200, json={"data": aic.artworks[2 * page - 2 : 2 * page]}
+                200, json={"data": aic.pool(request)[2 * page - 2 : 2 * page]}
             )
 
     aic.faults.append(bare_page)
     df = ingest_art(tmp_path, n=50, client=aic.client(), min_interval=0)
     assert len(df) == 3
-    assert len(aic.searches) == 2
+    assert aic.pages_for("Painting") == [1, 2]
 
 
 def test_never_asks_for_a_page_the_api_refuses(tmp_path, monkeypatch):
@@ -337,26 +376,101 @@ def test_never_asks_for_a_page_the_api_refuses(tmp_path, monkeypatch):
     aic = _many(10)
     aic.window = 3  # a fourth page would be answered with a 403
     df = ingest_art(tmp_path, n=10, client=aic.client(), min_interval=0)
-    assert len(df) == 3 and len(aic.searches) == 3
+    assert len(df) == 3 and aic.pages_for("Painting") == [1, 2, 3]
 
 
-def test_the_apis_real_1000_result_window_caps_the_catalog(tmp_path, caplog):
+def test_the_apis_real_1000_result_window_caps_a_type(tmp_path, caplog):
     # api.artic.edu answers 403 for page 11 at 100 per page: the first 1000 results are
-    # all a search can reach, so asking for 2000 yields at most 1000, with a warning
+    # all a search can reach, so a type that has 1500 contributes 1000, with a warning
     aic = _many(1500, size=(32, 24))
     with caplog.at_level(logging.WARNING, logger="amber.data.art"):
         df = ingest_art(tmp_path, n=2000, client=aic.client(), min_interval=0)
     assert len(df) == 1000
-    assert [json.loads(r.content)["page"] for r in aic.searches] == list(range(1, 11))
-    assert any("1000" in r.getMessage() for r in caplog.records)
-
-
-def test_asking_for_more_than_the_window_warns_up_front(tmp_path, caplog):
-    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
-        ingest_art(tmp_path, n=1001, client=_many(2).client(), min_interval=0)
+    assert aic.pages_for("Painting") == list(range(1, 11))
     assert any(
-        "1001" in r.getMessage() and "1000" in r.getMessage() for r in caplog.records
+        "1000" in r.getMessage() and "Painting" in r.getMessage()
+        for r in caplog.records
     )
+
+
+def test_each_types_window_is_separate(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(art, "PAGE_SIZE", 2)
+    monkeypatch.setattr(art, "MAX_RESULTS", 4)
+    aic = _by_type({kind: 6 for kind in KEEP_ART_TYPES})
+    aic.window = 4
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        df = ingest_art(tmp_path, n=100, client=aic.client(), min_interval=0)
+    assert Counter(df.artwork_type) == {kind: 4 for kind in KEEP_ART_TYPES}
+    assert all(aic.pages_for(kind) == [1, 2] for kind in KEEP_ART_TYPES)
+
+
+def test_asking_for_more_than_all_the_windows_hold_warns_up_front(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        ingest_art(tmp_path, n=4001, client=_many(2).client(), min_interval=0)
+    assert any(
+        "4001" in r.getMessage() and "4000" in r.getMessage() for r in caplog.records
+    )
+
+
+def test_asking_for_2000_does_not_warn(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger="amber.data.art"):
+        ingest_art(tmp_path, n=2000, client=_many(2).client(), min_interval=0)
+    assert not caplog.records
+
+
+# --- one search per artwork type, interleaved -----------------------------------------
+
+
+def test_results_interleave_across_types(tmp_path):
+    aic = _by_type({kind: 3 for kind in KEEP_ART_TYPES})
+    df = ingest_art(tmp_path, n=8, client=aic.client(), min_interval=0)
+    # one from each type in KEEP_ART_TYPES order, then the next from each, until n
+    assert [r.url.path.split("/")[3] for r in aic.image_requests] == [
+        f"img-{i}" for i in (101, 201, 301, 401, 102, 202, 302, 402)
+    ]
+    assert Counter(df.artwork_type) == {kind: 2 for kind in KEEP_ART_TYPES}
+
+
+def test_an_exhausted_type_is_skipped_and_the_others_carry_on(tmp_path):
+    aic = _by_type(
+        {"Painting": 3, "Photograph": 1, "Print": 3, "Drawing and Watercolor": 0}
+    )
+    df = ingest_art(tmp_path, n=6, client=aic.client(), min_interval=0)
+    assert [r.url.path.split("/")[3] for r in aic.image_requests] == [
+        f"img-{i}" for i in (101, 201, 301, 102, 302, 103)
+    ]
+    assert len(df) == 6
+    # a type that ran out is not searched again, and one with nothing is searched once
+    assert aic.pages_for("Photograph") == [1]
+    assert aic.pages_for("Drawing and Watercolor") == [1]
+
+
+def test_types_are_only_searched_when_the_round_robin_reaches_them(tmp_path):
+    aic = _by_type({kind: 3 for kind in KEEP_ART_TYPES})
+    ingest_art(tmp_path, n=2, client=aic.client(), min_interval=0)
+    assert [searched_type(r) for r in aic.searches] == ["Painting", "Photograph"]
+
+
+def test_reaches_2000_with_a_balanced_mix(tmp_path):
+    aic = _by_type({kind: 600 for kind in KEEP_ART_TYPES}, size=(32, 24))
+    df = ingest_art(tmp_path, n=2000, client=aic.client(), min_interval=0)
+    assert len(df) == 2000 and df.id.is_unique
+    assert Counter(df.artwork_type) == {kind: 500 for kind in KEEP_ART_TYPES}
+    assert all(aic.pages_for(kind) == [1, 2, 3, 4, 5] for kind in KEEP_ART_TYPES)
+
+
+def test_a_type_with_few_artworks_contributes_fewer(tmp_path):
+    aic = _by_type(
+        {"Painting": 10, "Photograph": 2, "Print": 10, "Drawing and Watercolor": 10}
+    )
+    df = ingest_art(tmp_path, n=20, client=aic.client(), min_interval=0)
+    assert len(df) == 20
+    assert Counter(df.artwork_type) == {
+        "Painting": 6,
+        "Photograph": 2,
+        "Print": 6,
+        "Drawing and Watercolor": 6,
+    }
 
 
 def test_an_artwork_repeated_on_a_later_page_counts_once(tmp_path, monkeypatch):
@@ -422,9 +536,9 @@ def test_requests_start_at_least_min_interval_apart(tmp_path, monkeypatch):
     starts = []
     aic.faults.append(lambda r: starts.append(clock.now))  # records, returns None
     ingest_art(tmp_path, n=5, client=aic.client(), min_interval=1.0)
-    assert len(starts) == 3 + 5  # three search pages + five images, all throttled
+    assert len(starts) == len(aic.requests) == 4 + 2 + 5  # 4 + 2 searches, 5 images
     gaps = [b - a for a, b in itertools.pairwise(starts)]
-    assert gaps == [pytest.approx(1.0)] * 7  # at least 1 s, and no longer than needed
+    assert gaps == [pytest.approx(1.0)] * 10  # at least 1 s, and no longer than needed
     assert min(gaps) >= 1.0 - 1e-9
 
 
@@ -434,8 +548,9 @@ def test_throttle_counts_time_spent_working(tmp_path, monkeypatch):
     aic = _many(2)
     # each request "takes" 0.4 s, so only 0.6 s of the 1 s interval is left to sleep
     aic.faults.append(lambda r: setattr(clock, "now", clock.now + 0.4))
-    ingest_art(tmp_path, n=2, client=aic.client(), min_interval=1.0)  # 3 requests
-    assert clock.sleeps == [pytest.approx(0.6), pytest.approx(0.6)]
+    ingest_art(tmp_path, n=2, client=aic.client(), min_interval=1.0)
+    assert len(aic.requests) == 4 + 2  # a search per type, two images
+    assert clock.sleeps == [pytest.approx(0.6)] * 5
 
 
 def test_no_sleeping_when_min_interval_is_zero(tmp_path, monkeypatch):
@@ -460,7 +575,7 @@ def test_transient_search_errors_are_retried(tmp_path, aic, mock_client, status)
     aic.faults.append(flaky)
     df = ingest_art(tmp_path, n=3, client=mock_client, min_interval=0)
     assert df.id.tolist() == ["a:1", "a:2"]
-    assert len(aic.searches) == art.ATTEMPTS
+    assert len(aic.searches) == art.ATTEMPTS + len(KEEP_ART_TYPES) - 1
 
 
 @pytest.mark.parametrize("status", [429, 500, 503])
@@ -530,7 +645,8 @@ def test_search_error_that_persists_is_raised_and_keeps_collected_rows(
     with pytest.raises(httpx.HTTPStatusError):
         ingest_art(tmp_path, n=4, client=aic.client(), min_interval=0)
     assert list(pd.read_parquet(tmp_path / "items.parquet").id) == ["a:1", "a:2"]
-    assert len(aic.searches) == 1 + art.ATTEMPTS  # page 1, then page 2 until it gave up
+    # page 1 of each type, then Painting's page 2 until it gave up
+    assert len(aic.searches) == len(KEEP_ART_TYPES) + art.ATTEMPTS
 
 
 def test_image_server_error_that_persists_skips_that_image(tmp_path, aic, mock_client):
@@ -569,13 +685,14 @@ def test_resume_does_not_download_existing_thumbnails_but_keeps_their_rows(
     assert {p: p.stat().st_mtime for p in (tmp_path / "thumbs").iterdir()} == mtimes
 
 
-def test_resumed_thumbnails_count_towards_n(tmp_path, aic, mock_client):
-    ingest_art(tmp_path, n=1, client=mock_client, min_interval=0)  # a:1 only
+def test_resumed_thumbnails_count_towards_n(tmp_path):
+    aic = _many(3)
+    ingest_art(tmp_path, n=1, client=aic.client(), min_interval=0)  # a:1 only
     assert [r.url.path for r in aic.image_requests] == [
         "/iiif/2/img-1/full/843,/0/default.jpg"
     ]
     aic.requests.clear()
-    df = ingest_art(tmp_path, n=2, client=mock_client, min_interval=0)
+    df = ingest_art(tmp_path, n=2, client=aic.client(), min_interval=0)
     assert df.id.tolist() == ["a:1", "a:2"]
     assert [r.url.path for r in aic.image_requests] == [  # a:1 skipped, a:2 fetched
         "/iiif/2/img-2/full/843,/0/default.jpg"
@@ -685,9 +802,9 @@ def test_does_not_close_a_client_it_was_given(tmp_path, mock_client):
 
 @pytest.mark.slow
 def test_real_api_first_artworks(tmp_path):
-    df = ingest_art(tmp_path, n=3, min_interval=1.0)
-    assert len(df) == 3 and df.id.str.startswith("a:").all()
-    assert set(df.artwork_type) <= set(KEEP_ART_TYPES)
+    df = ingest_art(tmp_path, n=4, min_interval=1.0)  # one round: a work of each type
+    assert len(df) == 4 and df.id.str.startswith("a:").all()
+    assert set(df.artwork_type) == set(KEEP_ART_TYPES)
     for item_id in df.id:
         with Image.open(tmp_path / "thumbs" / f"{item_id[2:]}.jpg") as im:
             assert max(im.size) == 384
