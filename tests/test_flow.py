@@ -3,8 +3,14 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from fakes import play_art, play_clothes, play_showdown, play_train, preds, revealed_p_a_from
+from fakes import (
+    play_art,
+    play_clothes,
+    preds,
+    revealed_p_a_from,
+)
 
+from amber.eval.metrics import score_showdown
 from amber.flow import (
     CatalogExhausted,
     allowed_ids,
@@ -21,7 +27,6 @@ from amber.store.db import (
     shown_ids,
 )
 from amber.yous.base import You, predict
-from amber.eval.metrics import score_showdown
 from amber.yous.registry import BUILDERS, FROZEN_YOUS
 
 
@@ -36,13 +41,13 @@ def _filters(ctx, user, genders=None, sections=None):
 
 
 def test_next_pair_resumes_open_pair(ctx, user):
-    p = next_pair(ctx.conn, user, "clothes", "train", ctx)
-    assert next_pair(ctx.conn, user, "clothes", "train", ctx) == p
+    p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
+    assert next_pair(ctx.conn, user, "clothes", "showdown", ctx) == p
 
 
-def test_train_phase_ends_at_setting(ctx, user):
-    play_train(ctx, user, n=ctx.settings.clothes_train_pairs)
-    assert next_pair(ctx.conn, user, "clothes", "train", ctx) is None
+def test_clothes_phase_ends_at_setting(ctx, user):
+    play_clothes(ctx, user, n=ctx.settings.clothes_pairs)
+    assert next_pair(ctx.conn, user, "clothes", "showdown", ctx) is None
 
 
 def test_art_train_phase_ends_at_setting(ctx, user):
@@ -51,14 +56,7 @@ def test_art_train_phase_ends_at_setting(ctx, user):
 
 
 def test_pairs_never_repeat_items(ctx, user):
-    seen = [i for c in play_train(ctx, user, n=6) for i in (c.a_id, c.b_id)]
-    assert len(seen) == len(set(seen))
-
-
-def test_pairs_never_repeat_items_across_phases(ctx, user):
-    train = play_train(ctx, user, n=6)
-    show = play_showdown(ctx, user, n=3)
-    seen = [i for c in train + show for i in (c.a_id, c.b_id)]
+    seen = [i for c in play_clothes(ctx, user, n=12) for i in (c.a_id, c.b_id)]
     assert len(seen) == len(set(seen))
 
 
@@ -83,11 +81,12 @@ def test_art_active_pairs_follow_the_art_basis(ctx, user):
     assert pair.a_id.startswith("a:") and pair.b_id.startswith("a:")
 
 
-def test_train_pairs_reproducible_per_user(ctx, user):
-    first = next_pair(ctx.conn, user, "clothes", "train", ctx)
+def test_clothes_pairs_reproducible_per_user(ctx, user):
+    first = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     # same user/domain/phase/n_done on a fresh pair: forget it and ask again
+    ctx.conn.execute("DELETE FROM predictions WHERE pair_id = ?", (first.pair_id,))
     ctx.conn.execute("DELETE FROM pairs WHERE pair_id = ?", (first.pair_id,))
-    again = next_pair(ctx.conn, user, "clothes", "train", ctx)
+    again = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     assert (again.a_id, again.b_id) == (first.a_id, first.b_id)
 
 
@@ -110,9 +109,9 @@ def test_pair_rng_value_is_pinned():
 
 def test_explicit_rng_is_used(ctx, user):
     p = next_pair(
-        ctx.conn, user, "clothes", "train", ctx, rng=np.random.default_rng(123)
+        ctx.conn, user, "clothes", "showdown", ctx, rng=np.random.default_rng(123)
     )
-    assert p is not None and p.phase == "train" and p.chosen_id is None
+    assert p is not None and p.phase == "showdown" and p.chosen_id is None
 
 
 # --- filters ---------------------------------------------------------------------
@@ -147,7 +146,7 @@ def test_allowed_ids_genders_only_keeps_default_sections(ctx, user):
 def test_pairs_respect_filters(ctx, user):
     _filters(ctx, user, genders=["Men"], sections=["Footwear"])
     items = ctx.items["clothes"].set_index("id")
-    chosen = play_train(ctx, user, n=6) + play_showdown(ctx, user, n=3)
+    chosen = play_clothes(ctx, user, n=9)
     assert len(chosen) == 9
     for c in chosen:
         for i in (c.a_id, c.b_id):
@@ -158,56 +157,47 @@ def test_pairs_respect_filters(ctx, user):
 def test_empty_filter_selection_exhausts_the_catalog(ctx, user):
     _filters(ctx, user, sections=[])
     with pytest.raises(CatalogExhausted):
-        next_pair(ctx.conn, user, "clothes", "train", ctx)
+        next_pair(ctx.conn, user, "clothes", "showdown", ctx)
 
 
 def test_catalog_exhausted_when_eligible_items_run_out(ctx, user):
-    ctx.settings = replace(ctx.settings, clothes_train_pairs=100)
+    ctx.settings = replace(ctx.settings, clothes_pairs=100)
     _filters(ctx, user, genders=["Men"], sections=["Footwear"])  # 24 items
     answered = 0
     with pytest.raises(CatalogExhausted):
         for _ in range(30):
-            pair = next_pair(ctx.conn, user, "clothes", "train", ctx)
+            pair = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
             answer_pair(ctx.conn, pair.pair_id, pair.a_id)
             answered += 1
     assert 1 <= answered <= 12
 
 
-# --- showdown --------------------------------------------------------------------
+# --- the scored clothing phase ---------------------------------------------------
 
 
-def test_showdown_freezes_yous_and_predicts_before_answer(ctx, user):
-    play_train(ctx, user, n=6)
+def test_clothes_pair_can_be_answered_after_prediction(ctx, user):
     p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
-    assert set(load_yous(ctx.conn, user)) == set(BUILDERS)
-    assert set(get_predictions(ctx.conn, p.pair_id)) == set(BUILDERS)
     assert p.chosen_id is None
-
-
-def test_showdown_pair_can_be_answered_after_prediction(ctx, user):
-    play_train(ctx, user, n=6)
-    p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     assert answer_pair(ctx.conn, p.pair_id, p.a_id).chosen_id == p.a_id
 
 
-def test_showdown_predictions_come_from_the_frozen_w(ctx, user):
-    play_train(ctx, user, prefer="red", n=6)
+def test_frozen_predictions_come_from_the_frozen_w(ctx, user):
+    play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
     p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     a, b = ctx.index["clothes"].centered([p.a_id, p.b_id])
-    preds = get_predictions(ctx.conn, p.pair_id)
+    got = get_predictions(ctx.conn, p.pair_id)
     for name, (w, meta) in load_yous(ctx.conn, user).items():
-        assert preds[name] == predict(You(name, w, meta), a, b)
-    assert preds["revealed"] in (0.0, 0.5, 1.0)
+        assert got[name] == predict(You(name, w, meta), a, b)
 
 
-def test_yous_stay_frozen_through_the_showdown(ctx, user):
-    play_train(ctx, user, prefer="red", n=6)
-    play_showdown(ctx, user, prefer="blue", n=1)
+def test_yous_stay_frozen_through_the_clothes_phase(ctx, user):
+    play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
+    play_clothes(ctx, user, prefer="blue", n=1)
     frozen = load_yous(ctx.conn, user)
     save_answer(ctx.conn, user, "describe", "text", "I love blue things.")
-    play_showdown(ctx, user, prefer="blue", n=2)
+    play_clothes(ctx, user, prefer="blue", n=8)
     after = load_yous(ctx.conn, user)
-    assert set(after) == set(frozen)
+    assert set(after) == set(frozen) == set(FROZEN_YOUS) & set(BUILDERS)
     for name in frozen:
         w0, m0 = frozen[name]
         w1, m1 = after[name]
@@ -216,15 +206,13 @@ def test_yous_stay_frozen_through_the_showdown(ctx, user):
             assert np.array_equal(w0, w1)
 
 
-def test_showdown_choices_never_train_revealed(ctx, user):
-    play_train(ctx, user, prefer="red", n=6)
-    play_showdown(ctx, user, prefer="blue", n=3)
-    frozen_meta = load_yous(ctx.conn, user)["revealed"][1]
-    assert frozen_meta["n"] == 6
+def test_clothes_picks_never_leak_into_the_frozen_art_you(ctx, user):
+    play_clothes(ctx, user, prefer="red", n=8)
+    art_w, art_meta = load_yous(ctx.conn, user)["art"]
+    assert art_w is None and "reason" in art_meta
 
 
-def test_showdown_freezes_once(ctx, user):
-    play_train(ctx, user, n=6)
+def test_clothes_freezes_once(ctx, user):
     next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     before = load_yous(ctx.conn, user)
     next_pair(ctx.conn, user, "clothes", "showdown", ctx)
@@ -234,8 +222,7 @@ def test_showdown_freezes_once(ctx, user):
     } == {k: (None if v[0] is None else v[0].tobytes(), v[1]) for k, v in after.items()}
 
 
-def test_showdown_resumes_open_pair_without_new_predictions(ctx, user):
-    play_train(ctx, user, n=6)
+def test_clothes_resumes_open_pair_without_new_pairs(ctx, user):
     p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
     assert next_pair(ctx.conn, user, "clothes", "showdown", ctx) == p
     assert (
@@ -244,18 +231,14 @@ def test_showdown_resumes_open_pair_without_new_predictions(ctx, user):
     )
 
 
-def test_showdown_resume_repairs_missing_predictions(ctx, user):
-    play_train(ctx, user, n=6)
+def test_clothes_resume_repairs_missing_predictions(ctx, user):
+    play_clothes(ctx, user, prefer="red", n=7)
     p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
+    original = get_predictions(ctx.conn, p.pair_id)
     ctx.conn.execute("DELETE FROM predictions WHERE pair_id = ?", (p.pair_id,))
     assert next_pair(ctx.conn, user, "clothes", "showdown", ctx) == p
-    assert set(get_predictions(ctx.conn, p.pair_id)) == set(BUILDERS)
-
-
-def test_showdown_phase_ends_at_setting(ctx, user):
-    play_train(ctx, user, n=6)
-    play_showdown(ctx, user, n=ctx.settings.showdown_pairs)
-    assert next_pair(ctx.conn, user, "clothes", "showdown", ctx) is None
+    assert get_predictions(ctx.conn, p.pair_id) == original
+    assert "revealed" in original
 
 
 def test_showdown_is_clothes_only(ctx, user):
@@ -269,11 +252,14 @@ def test_retest_is_not_wired_yet(ctx, user):
         next_pair(ctx.conn, user, "clothes", "retest", ctx)
 
 
-def test_showdown_pairs_are_not_chosen_by_the_model(ctx, user):
-    # random_pair is used: the showdown pair does not depend on what train taught revealed
-    play_train(ctx, user, prefer="red", n=6)
-    a = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
-    assert a.phase == "showdown" and a.a_id != a.b_id
+def test_clothes_pairs_are_random_not_model_chosen(ctx, user, monkeypatch):
+    from amber import flow
+
+    def boom(*_a, **_k):
+        raise AssertionError("a model chose a clothes pair")
+
+    monkeypatch.setattr(flow, "choose_pair", boom)
+    assert len(play_clothes(ctx, user, prefer="red", n=4)) == 4
 
 
 # --- progress --------------------------------------------------------------------
@@ -281,26 +267,24 @@ def test_showdown_pairs_are_not_chosen_by_the_model(ctx, user):
 
 def test_progress_counts_answered_pairs_per_domain_and_phase(ctx, user):
     s = ctx.settings
-    assert progress(ctx.conn, user, "clothes", "train", ctx) == {
+    assert progress(ctx.conn, user, "clothes", "showdown", ctx) == {
         "done": 0,
-        "total": s.clothes_train_pairs,
+        "total": s.clothes_pairs,
     }
-    play_train(ctx, user, n=2)
-    next_pair(ctx.conn, user, "clothes", "train", ctx)  # open, not yet answered
-    assert progress(ctx.conn, user, "clothes", "train", ctx)["done"] == 2
+    play_clothes(ctx, user, n=2)
+    next_pair(ctx.conn, user, "clothes", "showdown", ctx)  # open, not yet answered
+    assert progress(ctx.conn, user, "clothes", "showdown", ctx)["done"] == 2
     play_art(ctx, user, n=1)
     assert progress(ctx.conn, user, "art", "train", ctx) == {
         "done": 1,
         "total": s.art_train_pairs,
     }
-    assert progress(ctx.conn, user, "clothes", "showdown", ctx) == {
-        "done": 0,
-        "total": s.showdown_pairs,
-    }
     assert progress(ctx.conn, user, "clothes", "retest", ctx) == {
         "done": 0,
         "total": s.retest_pairs,
     }
+    with pytest.raises(ValueError):
+        progress(ctx.conn, user, "clothes", "train", ctx)
 
 
 def test_freeze_is_atomic(ctx, user, monkeypatch):
@@ -308,11 +292,11 @@ def test_freeze_is_atomic(ctx, user, monkeypatch):
     from amber import flow
 
     good = You("stated", np.ones(4, dtype=np.float32), {"ok": True})
-    bad = You("revealed", None, {"unserializable": object()})
+    bad = You("art", None, {"unserializable": object()})
     monkeypatch.setattr(
         flow,
-        "build_all_yous",
-        lambda conn, user_id, ctx: {"stated": good, "revealed": bad},
+        "build_frozen_yous",
+        lambda conn, user_id, ctx: {"stated": good, "art": bad},
     )
     with pytest.raises(TypeError):
         flow._freeze_yous(ctx.conn, user, ctx)

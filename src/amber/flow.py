@@ -1,10 +1,11 @@
 """The pair flow: which pair to show next, per domain and phase.
 
-* `train`: an active pair, chosen by a preference model replayed from that domain's answered
-  train choices.
-* `showdown` (clothes only): on the first call every You is built and frozen, then pairs are
-  drawn at random and every frozen You's prediction is saved *before* the pair is returned,
-  so before it can be answered. Showdown choices never train anything.
+* `train` (art only): an active pair, chosen by a preference model replayed from the answered
+  art choices.
+* `showdown` (clothes only, the one scored clothing phase): on the first call the Yous that
+  must not see clothing choices are built and frozen, then pairs are drawn at random. Before
+  a pair is returned every frozen You's prediction is saved, plus Revealed's, which comes
+  from a model replayed on the person's *earlier* clothing picks only.
 * `retest` is wired up in a later task.
 
 No item is ever shown twice to a user within a domain, whatever the phase.
@@ -32,8 +33,8 @@ from amber.store.db import (
     shown_ids,
 )
 from amber.yous.base import You, predict
-from amber.yous.registry import build_all_yous
-from amber.yous.revealed import train_preference_model
+from amber.yous.registry import build_frozen_yous
+from amber.yous.revealed import revealed_p_a, train_preference_model
 
 if TYPE_CHECKING:
     from amber.context import AppContext
@@ -77,8 +78,7 @@ def _total(domain: str, phase: str, ctx: "AppContext") -> int:
     s = ctx.settings
     totals = {
         ("art", "train"): s.art_train_pairs,
-        ("clothes", "train"): s.clothes_train_pairs,
-        ("clothes", "showdown"): s.showdown_pairs,
+        ("clothes", "showdown"): s.clothes_pairs,
         ("clothes", "retest"): s.retest_pairs,
     }
     try:
@@ -102,9 +102,9 @@ def progress(
 def _freeze_yous(
     conn: sqlite3.Connection, user_id: str, ctx: "AppContext"
 ) -> dict[str, You]:
-    """Build and save every You, once. Later calls return the saved Yous untouched."""
+    """Build and save the frozen Yous, once. Later calls return the saved Yous untouched."""
     if not load_yous(conn, user_id):
-        built = build_all_yous(conn, user_id, ctx)
+        built = build_frozen_yous(conn, user_id, ctx)
         save_yous(  # one transaction: a failure leaves no half-frozen set
             conn, user_id, {y.name: (y.w, y.meta) for y in built.values()}
         )
@@ -119,11 +119,11 @@ def _save_frozen_predictions(
     frozen: dict[str, You],
     ctx: "AppContext",
 ) -> None:
-    """Every frozen You's `P(a)` for the pair, saved in one call."""
+    """Every frozen You's `P(a)` for the pair, plus Revealed's, saved in one call."""
     a, b = ctx.index["clothes"].centered([pair.a_id, pair.b_id])
-    save_predictions(
-        conn, pair.pair_id, {name: predict(you, a, b) for name, you in frozen.items()}
-    )
+    preds = {name: predict(you, a, b) for name, you in frozen.items()}
+    preds["revealed"] = revealed_p_a(conn, pair.user_id, pair, ctx)
+    save_predictions(conn, pair.pair_id, preds)
 
 
 def next_pair(
@@ -138,7 +138,7 @@ def next_pair(
 
     An unanswered pair is returned as it is, so closing the tab mid-pair resumes it. Raises
     `CatalogExhausted` when no unseen, non-near-duplicate pair remains, `ValueError` for a
-    showdown on art, `NotImplementedError` for retest.
+    showdown on art or a clothes train, `NotImplementedError` for retest.
     """
     total = _total(domain, phase, ctx)
     if phase == "retest":
@@ -149,7 +149,7 @@ def next_pair(
     if pending is not None:
         if phase == "showdown":  # repair a pair whose predictions never landed
             frozen = _freeze_yous(conn, user_id, ctx)
-            if set(get_predictions(conn, pending.pair_id)) != set(frozen):
+            if set(get_predictions(conn, pending.pair_id)) != {*frozen, "revealed"}:
                 _save_frozen_predictions(conn, pending, frozen, ctx)
         return pending
 
