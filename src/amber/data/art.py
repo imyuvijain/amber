@@ -40,7 +40,9 @@ FIELDS = [
     "image_id",
 ]
 PAGE_SIZE = 100
-MAX_PAGES = 100  # the API answers 403 ("Invalid number of results") past 10,000 results
+# A search reaches only its first 1000 results: page 11 at 100 per page, or page 21 at 50,
+# is answered 403 "Invalid number of results" (checked against the live API).
+MAX_RESULTS = 1000
 ART_THUMB_SIDE = 384  # longest side in pixels; the aspect ratio is kept
 
 REQUEST_TIMEOUT = 30.0  # seconds; the IIIF server can be slow, httpx's default is 5
@@ -108,7 +110,7 @@ class _Fetcher:
 
 def _search_results(fetcher: _Fetcher) -> Iterator[dict]:
     """Artworks from successive search pages, fetching a page only when asked for more."""
-    for page in range(1, MAX_PAGES + 1):
+    for page in range(1, MAX_RESULTS // PAGE_SIZE + 1):
         response = fetcher.send("POST", SEARCH_URL, json=_search_body(page))
         response.raise_for_status()
         payload = response.json()
@@ -119,7 +121,7 @@ def _search_results(fetcher: _Fetcher) -> Iterator[dict]:
             total_pages is not None and page >= total_pages
         ):
             return
-    logger.warning("stopped at the API's limit of %d results", MAX_PAGES * PAGE_SIZE)
+    logger.warning("stopped at the API's limit of %d results per search", MAX_RESULTS)
 
 
 def _thumbnail(data: bytes) -> Image.Image:
@@ -150,7 +152,8 @@ def ingest_art(
     """Build `out_dir/items.parquet` and `out_dir/thumbs/<aic_id>.jpg`; return the table.
 
     Collects `n` public-domain artworks of the `KEEP_ART_TYPES` that have a saved
-    thumbnail, paging through the search results; an image that fails (404, server
+    thumbnail, paging through the search results (the API serves only the first
+    `MAX_RESULTS` of them, so that is also the most `n` can reach); an image that fails (404, server
     error, undecodable) is logged and skipped and the next result takes its place. Stops
     early when the results run out, and aborts with a RuntimeError after
     `MAX_CONSECUTIVE_FAILURES` unusable images in a row (something systematic is wrong).
@@ -162,6 +165,13 @@ def ingest_art(
     """
     if n < 1:
         raise ValueError("n must be a positive number of artworks")
+    if n > MAX_RESULTS:
+        logger.warning(
+            "n=%d is more than the %d results one search can page through; "
+            "collecting at most that many",
+            n,
+            MAX_RESULTS,
+        )
     out_dir = Path(out_dir)
     thumbs = out_dir / "thumbs"
     thumbs.mkdir(parents=True, exist_ok=True)
