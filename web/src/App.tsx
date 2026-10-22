@@ -10,17 +10,13 @@ import Welcome from './screens/Welcome'
 import { clearSession, loadStep, loadUserId, saveStep, saveUserId } from './storage'
 import { isStepId, stepAfter } from './steps'
 
-// Art picks come before the clothes picks: same screen, art domain.
-const ArtPick = (props: ScreenProps) => <ThisOrThat {...props} domain="art" />
-
 // One screen per step id in steps.ts. A new step is one entry here and one in STEPS.
 const SCREENS: Record<string, ComponentType<ScreenProps>> = {
-  describe: Describe,
   sections: Sections,
-  art: ArtPick,
-  train: ThisOrThat,
-  showdown: Showdown,
-  scoreboard: Scoreboard,
+  describe: Describe,
+  art: ThisOrThat,
+  clothes: Showdown,
+  results: Scoreboard,
 }
 
 function initial(): { userId: string | null; step: string } {
@@ -45,8 +41,8 @@ export default function App() {
 
   const created = (id: string) => {
     saveUserId(id)
-    saveStep('describe')
-    setSession({ userId: id, step: 'describe' })
+    saveStep('sections')
+    setSession({ userId: id, step: 'sections' })
   }
 
   const Screen = SCREENS[step]
