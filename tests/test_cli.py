@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 
@@ -18,6 +19,11 @@ def test_cli_help_lists_usage():
 def test_ingest_help_lists_clothes():
     result = CliRunner().invoke(app, ["ingest", "--help"])
     assert result.exit_code == 0 and "clothes" in result.output
+
+
+def test_ingest_help_lists_art():
+    result = CliRunner().invoke(app, ["ingest", "--help"])
+    assert result.exit_code == 0 and re.search(r"\bart\b", result.output)
 
 
 def test_ingest_clothes_streams_into_data_dir_and_prints_count(monkeypatch, tmp_path):
@@ -135,3 +141,37 @@ def test_ingest_clothes_failed_stream_prints_traceback_and_exits_1(tmp_path, fai
 def test_ingest_clothes_rejects_non_positive_limit():
     result = CliRunner().invoke(app, ["ingest", "clothes", "--limit", "0"])
     assert result.exit_code != 0
+
+
+def test_ingest_art_fetches_into_data_dir_and_prints_count(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_ingest(out_dir, n=2000, client=None, min_interval=1.0):
+        calls.append((out_dir, n, client, min_interval))
+        return pd.DataFrame({"id": ["a:1", "a:2"]})
+
+    monkeypatch.setattr("amber.data.art.ingest_art", fake_ingest)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)  # read at call time
+    result = CliRunner().invoke(app, ["ingest", "art", "--n", "40"])
+    assert result.exit_code == 0
+    assert calls == [(tmp_path / "art", 40, None, 1.0)]  # no client: it makes its own
+    assert result.output.split()[0] == "2"
+
+    calls.clear()
+    assert CliRunner().invoke(app, ["ingest", "art"]).exit_code == 0
+    assert calls == [(tmp_path / "art", 2000, None, 1.0)]  # --n defaults to 2000
+
+
+def test_ingest_art_failure_exits_nonzero(monkeypatch, tmp_path):
+    def boom(out_dir, n=2000, client=None, min_interval=1.0):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("amber.data.art.ingest_art", boom)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    result = CliRunner().invoke(app, ["ingest", "art"])
+    assert result.exit_code != 0 and isinstance(result.exception, OSError)
+
+
+def test_ingest_art_rejects_non_positive_n():
+    result = CliRunner().invoke(app, ["ingest", "art", "--n", "0"])
+    assert result.exit_code != 0 and "Invalid value" in result.output
