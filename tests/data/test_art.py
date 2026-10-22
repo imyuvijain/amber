@@ -155,12 +155,12 @@ def _many(count, size=(400, 300), **kwargs):
 
 
 def _by_type(counts, size=(400, 300)):
-    """`counts` maps artwork type -> how many artworks it has. Ids are 100 * (the type's
-    position in KEEP_ART_TYPES + 1) + k: Painting 101, 102, ...; Photograph 201, ..."""
+    """`counts` maps artwork type -> how many artworks it has. Ids are 1000 * (the
+    type's position in KEEP_ART_TYPES, from 1) + k: Painting 1001, ...; Photograph 2001, ..."""
     artworks = []
     for position, kind in enumerate(KEEP_ART_TYPES, start=1):
         artworks += [
-            _artwork(100 * position + k, kind)
+            _artwork(1000 * position + k, kind)
             for k in range(1, counts.get(kind, 0) + 1)
         ]
     image = _jpeg(size)
@@ -426,7 +426,7 @@ def test_results_interleave_across_types(tmp_path):
     df = ingest_art(tmp_path, n=8, client=aic.client(), min_interval=0)
     # one from each type in KEEP_ART_TYPES order, then the next from each, until n
     assert [r.url.path.split("/")[3] for r in aic.image_requests] == [
-        f"img-{i}" for i in (101, 201, 301, 401, 102, 202, 302, 402)
+        f"img-{i}" for i in (1001, 2001, 3001, 4001, 1002, 2002, 3002, 4002)
     ]
     assert Counter(df.artwork_type) == {kind: 2 for kind in KEEP_ART_TYPES}
 
@@ -437,7 +437,7 @@ def test_an_exhausted_type_is_skipped_and_the_others_carry_on(tmp_path):
     )
     df = ingest_art(tmp_path, n=6, client=aic.client(), min_interval=0)
     assert [r.url.path.split("/")[3] for r in aic.image_requests] == [
-        f"img-{i}" for i in (101, 201, 301, 102, 302, 103)
+        f"img-{i}" for i in (1001, 2001, 3001, 1002, 3002, 1003)
     ]
     assert len(df) == 6
     # a type that ran out is not searched again, and one with nothing is searched once
