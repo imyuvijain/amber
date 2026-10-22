@@ -65,3 +65,30 @@ def test_benchmark_is_reproducible():
         "temperature": 0.2,
     }
     assert run_benchmark(X, D, seed=3, **kw) == run_benchmark(X, D, seed=3, **kw)
+
+
+def test_benchmark_scores_exactly_n_test_pairs(monkeypatch):
+    from amber.prefs import simulate
+
+    X, D, _ = synthetic_catalog()
+    calls = []
+
+    class CountingModel(simulate.PreferenceModel):
+        def p_prefer(self, a, b):
+            calls.append(1)
+            return super().p_prefer(a, b)
+
+    monkeypatch.setattr(simulate, "PreferenceModel", CountingModel)
+    for strategy in ("active", "random"):
+        calls.clear()
+        run_benchmark(
+            X,
+            D,
+            n_users=2,
+            n_train=5,
+            n_test=17,
+            strategy=strategy,
+            temperature=0.2,
+            seed=SEED,
+        )
+        assert len(calls) == 2 * 17
