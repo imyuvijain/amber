@@ -265,3 +265,84 @@ def shrink_thumbs(
     thumbs = config.DATA_DIR / "clothes" / "thumbs"
     count = shrink_thumbnails(thumbs, config.THUMB_SIZE, THUMB_QUALITY)
     typer.echo(f"shrunk {count} thumbnails in {thumbs}")
+
+
+_BENCH_TEMPERATURES = (0.05, 0.2)
+_BENCH_PRIOR_VARS = (0.1, 1.0, 10.0)
+
+
+@app.command("bench-active")
+def bench_active(
+    n_users: Annotated[
+        int, typer.Option(min=1, help="Simulated people per table cell.")
+    ] = 30,
+    n_train: Annotated[
+        int, typer.Option(min=1, help="Pairs each simulated person answers.")
+    ] = 40,
+    n_test: Annotated[
+        int, typer.Option(min=1, help="Held-out pairs each model is scored on.")
+    ] = 200,
+    seed: Annotated[int, typer.Option(help="Random seed.")] = config.SEED,
+    model: _ModelOption = config.MODEL_NAME,
+    pretrained: _PretrainedOption = config.MODEL_PRETRAINED,
+) -> None:
+    """Simulate people on the clothes basis: does choosing pairs actively beat random ones?
+
+    Prints held-out pairwise accuracy for strategy (active, random) x temperature
+    (0.05, 0.2) x prior variance (0.1, 1, 10), as a markdown table.
+    """
+    from amber.prefs.simulate import run_benchmark
+    from amber.space.basis import Basis
+    from amber.space.index import VectorIndex
+
+    directory = config.DATA_DIR / "clothes" / "emb" / f"{model}__{pretrained}"
+    if not (directory / "basis").exists():
+        raise _fail(
+            f"No clothes embeddings for {model}/{pretrained}: run `amber embed` first."
+        )
+    index = VectorIndex.load(directory)
+    X = Basis.load(directory / "basis").project(index.centered(index.ids))
+    dup_vectors = index.vectors
+
+    started = time.perf_counter()
+    typer.echo(
+        f"{len(index)} items, {X.shape[1]} dims; {n_users} users x {n_train} train "
+        f"pairs x {n_test} test pairs, seed {seed}"
+    )
+    typer.echo("")
+    typer.echo("| temperature | prior_var | active | random | active - random |")
+    typer.echo("| --- | --- | --- | --- | --- |")
+    for temperature in _BENCH_TEMPERATURES:
+        for prior_var in _BENCH_PRIOR_VARS:
+            accuracy = {
+                strategy: run_benchmark(
+                    X,
+                    dup_vectors,
+                    n_users=n_users,
+                    n_train=n_train,
+                    n_test=n_test,
+                    strategy=strategy,
+                    temperature=temperature,
+                    seed=seed,
+                    prior_var=prior_var,
+                )
+                for strategy in ("active", "random")
+            }
+            typer.echo(
+                f"| {temperature} | {prior_var:g} | {accuracy['active']:.3f} | "
+                f"{accuracy['random']:.3f} | {accuracy['active'] - accuracy['random']:+.3f} |"
+            )
+    chance = run_benchmark(
+        X,
+        dup_vectors,
+        n_users=n_users,
+        n_train=n_train,
+        n_test=n_test,
+        strategy="active",
+        temperature=_BENCH_TEMPERATURES[0],
+        seed=seed,
+        random_clicker=True,
+    )
+    typer.echo("")
+    typer.echo(f"coin-flip clicker (active, default prior_var): {chance:.3f}")
+    typer.echo(f"took {time.perf_counter() - started:.0f}s")
