@@ -20,6 +20,9 @@ NEAR_DUP_COS = 0.95  # pairs at or above this cosine similarity are never shown 
 MODEL_NAME: str = "ViT-B-32"  # chosen in Task 5; see docs/results/space.md
 MODEL_PRETRAINED: str = "laion2b_s34b_b79k"
 
+# Preference model
+PRIOR_VAR = 1.0  # prior variance of each taste coordinate; tuned on the benchmark (docs/results/bench.md)
+
 # Clothing catalog
 KEEP_MASTER_CATEGORIES = ("Apparel", "Footwear", "Accessories")
 DEFAULT_SECTIONS = ("Apparel", "Footwear")
