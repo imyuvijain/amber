@@ -4,6 +4,8 @@ import numpy as np
 from scipy.special import log_ndtr
 from scipy.stats import norm
 
+from amber import config
+
 
 class PreferenceModel:
     """Gaussian posterior N(mean, cov) over a taste direction w.
@@ -12,7 +14,9 @@ class PreferenceModel:
     and the posterior is updated by assumed-density filtering (moment matching).
     """
 
-    def __init__(self, dim: int, prior_var: float = 1.0):
+    def __init__(self, dim: int, prior_var: float | None = None):
+        if prior_var is None:  # resolved now, so config reloads and tuning take effect
+            prior_var = config.PRIOR_VAR
         self.dim = dim
         self.mean = np.zeros(dim)
         self.cov = prior_var * np.eye(dim)
