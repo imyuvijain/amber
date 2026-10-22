@@ -58,6 +58,15 @@
 - **Secrets:** no secrets in git. `ANTHROPIC_API_KEY` is read from the environment only. Without it, `values` abstains (predicts 0.5) instead of failing.
 - **Fast tests:** the default `pytest` run uses `FakeEncoder` and a generated fixture catalog. Real-model tests are marked `@pytest.mark.slow` and are excluded by default.
 - **AIC etiquette:** every AIC request sends `AIC-User-Agent: amber (https://github.com/imyuvijain/amber)` and stays at or under 1 request per second.
+- **Small commits (the user wants many):** split every task's "Commit" step into several commits, in this order:
+  - `build:` or `chore:` for dependency and tooling changes
+  - `test(<area>):` for the failing tests
+  - `feat(<area>):` for each function or module that turns them green, one per function or module
+  - `feat(cli):` or `feat(api):` for the wiring
+  - `docs(results):` for measured results
+  - one `feat(web):` commit per screen or component
+
+  Messages describe what changed, and each one ends with the `Co-Authored-By` line. Run `git push origin main` after every finished task.
 - **Item ids:** clothes are `"c:<n>"` and art is `"a:<n>"`. Thumbnails live at `data/<domain>/thumbs/<n>.jpg`.
 - **Licenses:** AIC public-domain images are CC0. The clothing dataset's license is unstated on Hugging Face (it comes from Kaggle's *Fashion Product Images* by Param Aggarwal). Check the license before posting product images publicly beyond small README screenshots.
 
