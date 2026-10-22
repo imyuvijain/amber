@@ -22,6 +22,7 @@ from amber.store.db import (
     save_answer,
     save_predictions,
     save_you,
+    save_yous,
     shown_ids,
 )
 
@@ -327,3 +328,13 @@ def test_answer_pair_lost_race_same_id_returns_pair_other_id_raises(conn, monkey
     monkeypatch.setattr(db, "_get_pair", stale_get2)
     with pytest.raises(AlreadyAnswered):
         answer_pair(conn, p2.pair_id, "c:4")
+
+
+def test_save_yous_is_all_or_nothing(conn):
+    u = create_user(conn, "y")
+    save_yous(conn, u, {"stated": (np.ones(3), {"a": 1}), "values": (None, {})})
+    assert set(load_yous(conn, u)) == {"stated", "values"}
+    v = create_user(conn, "z")
+    with pytest.raises(TypeError):
+        save_yous(conn, v, {"stated": (None, {}), "revealed": (None, {"x": object()})})
+    assert load_yous(conn, v) == {}

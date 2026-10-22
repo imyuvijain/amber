@@ -28,7 +28,7 @@ from amber.store.db import (
     load_yous,
     open_pair,
     save_predictions,
-    save_you,
+    save_yous,
     shown_ids,
 )
 from amber.yous.base import You, predict
@@ -104,8 +104,10 @@ def _freeze_yous(
 ) -> dict[str, You]:
     """Build and save every You, once. Later calls return the saved Yous untouched."""
     if not load_yous(conn, user_id):
-        for you in build_all_yous(conn, user_id, ctx).values():
-            save_you(conn, user_id, you.name, you.w, you.meta)
+        built = build_all_yous(conn, user_id, ctx)
+        save_yous(  # one transaction: a failure leaves no half-frozen set
+            conn, user_id, {y.name: (y.w, y.meta) for y in built.values()}
+        )
     return {
         name: You(name, w, meta) for name, (w, meta) in load_yous(conn, user_id).items()
     }
