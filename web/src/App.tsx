@@ -1,12 +1,17 @@
 import { useCallback, useState, type ComponentType } from 'react'
 import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
+import Describe from './screens/Describe'
+import Sections from './screens/Sections'
 import Welcome from './screens/Welcome'
 import { clearSession, loadStep, loadUserId, saveStep, saveUserId } from './storage'
 import { isStepId, stepAfter } from './steps'
 
 // One screen per step id in steps.ts. A new step is one entry here and one in STEPS.
-const SCREENS: Record<string, ComponentType<ScreenProps>> = {}
+const SCREENS: Record<string, ComponentType<ScreenProps>> = {
+  describe: Describe,
+  sections: Sections,
+}
 
 function initial(): { userId: string | null; step: string } {
   const userId = loadUserId()
