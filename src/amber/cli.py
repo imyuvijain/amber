@@ -74,3 +74,20 @@ def clothes(
     typer.echo(f"{len(items)} clothing items in {out_dir}")
     if limit is not None:
         _exit_without_teardown(0)
+
+
+@ingest_app.command()
+def art(
+    n: Annotated[
+        int,
+        typer.Option(
+            min=1, help="How many artworks to collect (about 1 request per second)."
+        ),
+    ] = 2000,
+) -> None:
+    """Fetch public-domain artworks from the Art Institute of Chicago into <data dir>/art."""
+    from amber.data.art import ingest_art
+
+    out_dir = config.DATA_DIR / "art"
+    items = ingest_art(out_dir, n=n)
+    typer.echo(f"{len(items)} artworks in {out_dir}")
