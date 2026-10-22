@@ -1,0 +1,69 @@
+.calls {
+  max-width: 44rem;
+  margin: 0 auto;
+  min-height: 7.5rem;
+}
+
+.calls-empty {
+  color: var(--muted);
+  text-align: center;
+  padding-top: 1rem;
+}
+
+.calls ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+
+.calls li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    'bead name tally'
+    'bead verdict tally';
+  column-gap: 0.6rem;
+  align-items: center;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1.5px dashed var(--line);
+  background: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.calls li .bead {
+  grid-area: bead;
+}
+.calls-name {
+  grid-area: name;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.calls-verdict {
+  grid-area: verdict;
+  font-size: 0.85rem;
+  min-height: 1.3em;
+  color: var(--muted);
+}
+.calls-tally {
+  grid-area: tally;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+/* Called it: filled with the You's own color. Missed: stays outlined and quiet. */
+.calls li[data-call='hit'] {
+  border: 1.5px solid var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--panel));
+}
+.calls li[data-call='hit'] .calls-verdict {
+  color: var(--ink);
+  font-weight: 650;
+}
+.calls li[data-call='miss'] {
+  border-style: solid;
+  border-color: var(--line);
+}
