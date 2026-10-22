@@ -402,6 +402,10 @@ def test_each_types_window_is_separate(tmp_path, monkeypatch, caplog):
         df = ingest_art(tmp_path, n=100, client=aic.client(), min_interval=0)
     assert Counter(df.artwork_type) == {kind: 4 for kind in KEEP_ART_TYPES}
     assert all(aic.pages_for(kind) == [1, 2] for kind in KEEP_ART_TYPES)
+    # each type reports hitting its own window
+    messages = [r.getMessage() for r in caplog.records]
+    for kind in KEEP_ART_TYPES:
+        assert sum(kind in m and "limit" in m for m in messages) == 1
 
 
 def test_asking_for_more_than_all_the_windows_hold_warns_up_front(tmp_path, caplog):

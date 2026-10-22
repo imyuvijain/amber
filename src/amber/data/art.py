@@ -174,15 +174,18 @@ def ingest_art(
     Collects `n` public-domain artworks of the `KEEP_ART_TYPES` that have a saved
     thumbnail. Each type is searched separately (the API serves only the first
     `MAX_RESULTS` of a search) and taken in turns, so the mix is as even as the pools
-    allow and a type with fewer artworks just contributes fewer; an image that fails (404, server
-    error, undecodable) is logged and skipped and the next result takes its place. Stops
-    early when the results run out, and aborts with a RuntimeError after
-    `MAX_CONSECUTIVE_FAILURES` unusable images in a row (something systematic is wrong).
+    allow and a type with fewer artworks just contributes fewer.
+
+    An image that fails (404, server error, timeout, undecodable) is logged and skipped
+    and the next result takes its place. The run stops early when the results run out,
+    and aborts with a RuntimeError after `MAX_CONSECUTIVE_FAILURES` unusable images in a
+    row (something systematic is wrong). A refused or reset connection stops it at once.
+
     `client` is an `httpx.Client` to send through (tests pass a mock one); by default one
     is created and closed here. The returned/written table also keeps rows from a
-    previous run's parquet, de-duplicated by `id`. If the run is interrupted (a
-    persistent network error, Ctrl-C, the abort above), the rows collected so far are
-    saved before the exception propagates.
+    previous run's parquet, de-duplicated by `id`. If the run is interrupted (a network
+    error, Ctrl-C, the abort above), the rows collected so far are saved before the
+    exception propagates.
     """
     if n < 1:
         raise ValueError("n must be a positive number of artworks")
@@ -246,7 +249,7 @@ def ingest_art(
                     skipped += 1
                     failures_in_a_row += 1
                     if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
-                        # e.g. every image answers 403: don't walk all 10,000 results
+                        # e.g. every image answers 403: don't walk every result
                         raise RuntimeError(
                             f"{failures_in_a_row} images in a row could not be fetched; "
                             f"last: {exc}"
