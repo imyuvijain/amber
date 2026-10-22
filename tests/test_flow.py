@@ -286,3 +286,19 @@ def test_progress_counts_answered_pairs_per_domain_and_phase(ctx, user):
         "done": 0,
         "total": s.retest_pairs,
     }
+
+
+def test_freeze_is_atomic(ctx, user, monkeypatch):
+    """A failure while saving the Yous leaves none of them saved (no half-frozen set)."""
+    from amber import flow
+
+    good = You("stated", np.ones(4, dtype=np.float32), {"ok": True})
+    bad = You("revealed", None, {"unserializable": object()})
+    monkeypatch.setattr(
+        flow,
+        "build_all_yous",
+        lambda conn, user_id, ctx: {"stated": good, "revealed": bad},
+    )
+    with pytest.raises(TypeError):
+        flow._freeze_yous(ctx.conn, user, ctx)
+    assert load_yous(ctx.conn, user) == {}
