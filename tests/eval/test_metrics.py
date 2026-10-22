@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from amber.eval.metrics import Score, score_showdown
+from amber.eval.metrics import Score, learning_curve, score_showdown
 from amber.store.db import Choice
 from amber.yous.base import YOU_ORDER
 
@@ -96,3 +96,33 @@ def test_bootstrap_is_seeded():
     a = score_showdown(choices, preds, seed=1)
     b = score_showdown(choices, preds, seed=2)
     assert [(s.ci_low, s.ci_high) for s in a] != [(s.ci_low, s.ci_high) for s in b]
+
+
+def test_learning_curve_length_and_bounds():
+    choices, preds = _twenty()
+    curve = learning_curve(choices, preds, "stated", size=5)
+    assert len(curve) == 20
+    assert all(0.0 <= x <= 1.0 for x in curve)
+
+
+def test_learning_curve_is_shorter_at_the_start():
+    choices = [_choice(0), _choice(1, chose_a=False), _choice(2)]
+    preds = {f"p{i}": {"stated": 1.0} for i in range(3)}
+    # windows: [p0], [p0, p1], [p1, p2] with size 2
+    assert learning_curve(choices, preds, "stated", size=2) == [1.0, 0.5, 0.5]
+
+
+def test_learning_curve_gives_abstainers_half_credit_and_skips_missing():
+    choices = [_choice(0), _choice(1)]
+    assert learning_curve(choices, {"p0": {"revealed": 0.5}}, "revealed") == [0.5]
+    assert learning_curve(choices, {}, "revealed") == []
+
+
+def test_score_window_selects_positions():
+    choices = [_choice(i) for i in range(6)]
+    preds = {f"p{i}": {"stated": 1.0 if i >= 3 else 0.0} for i in range(6)}
+    s = _by_you(score_showdown(choices, preds, window=(4, 6)))["stated"]
+    assert s.n == 3 and s.accuracy == 1.0
+    s = _by_you(score_showdown(choices, preds, window=(1, 3)))["stated"]
+    assert s.n == 3 and s.accuracy == 0.0
+    assert _by_you(score_showdown(choices, preds, window=None))["stated"].n == 6

@@ -28,7 +28,7 @@ def ctx(fixture_data: Path):
     encoder = FakeEncoder()
     for domain in ("clothes", "art"):
         embed_domain(domain, encoder, data_dir=fixture_data)
-    context = load_context(fixture_data, Settings(6, 6, 3, 2, 7), encoder)
+    context = load_context(fixture_data, Settings(6, 40, 2, 7), encoder)
     context.conn.close()  # load_context opened <data_dir>/amber.db; tests use memory
     context.conn = connect(":memory:")
     yield context

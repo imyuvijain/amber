@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from fakes import play_art, play_showdown, play_train
+from fakes import play_art, play_clothes, play_showdown, play_train, preds, revealed_p_a_from
 
 from amber.flow import (
     CatalogExhausted,
@@ -21,7 +21,8 @@ from amber.store.db import (
     shown_ids,
 )
 from amber.yous.base import You, predict
-from amber.yous.registry import BUILDERS
+from amber.eval.metrics import score_showdown
+from amber.yous.registry import BUILDERS, FROZEN_YOUS
 
 
 def _filters(ctx, user, genders=None, sections=None):
@@ -316,3 +317,41 @@ def test_freeze_is_atomic(ctx, user, monkeypatch):
     with pytest.raises(TypeError):
         flow._freeze_yous(ctx.conn, user, ctx)
     assert load_yous(ctx.conn, user) == {}
+
+
+# --- one scored clothing phase --------------------------------------------------
+
+
+def test_clothes_train_phase_is_gone(ctx, user):
+    with pytest.raises(ValueError):
+        next_pair(ctx.conn, user, "clothes", "train", ctx)
+
+
+def test_frozen_before_first_clothes_pair(ctx, user):
+    play_art(ctx, user, n=ctx.settings.art_train_pairs)
+    p = next_pair(ctx.conn, user, "clothes", "showdown", ctx)
+    assert set(load_yous(ctx.conn, user)) == set(FROZEN_YOUS) & set(BUILDERS)
+    assert set(get_predictions(ctx.conn, p.pair_id)) == (
+        set(FROZEN_YOUS) & set(BUILDERS)
+    ) | {"revealed"}
+
+
+def test_revealed_abstains_for_first_five_pairs(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=6)
+    assert [get_predictions(ctx.conn, c.pair_id)["revealed"] for c in choices[:5]] == [
+        0.5
+    ] * 5
+
+
+def test_revealed_prediction_uses_only_earlier_picks(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=8)
+    p7 = get_predictions(ctx.conn, choices[7].pair_id)["revealed"]
+    assert p7 == pytest.approx(revealed_p_a_from(choices[:7], choices[7], ctx))
+    assert p7 != 0.5
+
+
+def test_revealed_learns_red(ctx, user):
+    choices = play_clothes(ctx, user, prefer="red", n=ctx.settings.clothes_pairs)
+    assert len(choices) == ctx.settings.clothes_pairs
+    late = score_showdown(choices, preds(ctx, choices), window=(21, 40))
+    assert next(s for s in late if s.you == "revealed").accuracy > 0.7
