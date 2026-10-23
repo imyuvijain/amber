@@ -1,5 +1,3 @@
-import json
-
 import numpy as np
 import pytest
 from fakes import play_art, play_clothes
@@ -52,7 +50,9 @@ def _extremes(trait: str, high: bool) -> dict[str, int]:
     """Answers that put `trait` at +1 (high) or -1 (low)."""
     top = 5 if high else 1
     return {
-        i.id: (top if i.keyed == 1 else 6 - top) for i in load_ipip() if i.trait == trait
+        i.id: (top if i.keyed == 1 else 6 - top)
+        for i in load_ipip()
+        if i.trait == trait
     }
 
 
@@ -199,5 +199,5 @@ def test_bigfive_ignores_clothing_picks(ctx, user):
     play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
     play_clothes(ctx, user, prefer="blue", n=8)
     after = build_bigfive(ctx.conn, user, ctx)
-    assert json.dumps(after.meta) == json.dumps(before.meta)
+    assert after.meta == before.meta
     assert np.array_equal(after.w, before.w)
