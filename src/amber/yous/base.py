@@ -6,6 +6,8 @@ You abstains (it has nothing to say about this person) and predicts 0.5 everywhe
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -17,6 +19,20 @@ YouName = Literal["stated", "bigfive", "art", "revealed"]
 YOU_ORDER: tuple[YouName, ...] = ("stated", "bigfive", "art", "revealed")
 
 _EPS = 1e-6  # a direction shorter than this is float32 noise, not a direction
+
+BANNED_WORDS_PATH = Path(__file__).parent / "files" / "banned_words.txt"
+
+
+@cache
+def _banned_words() -> frozenset[str]:
+    lines = (line.strip() for line in BANNED_WORDS_PATH.read_text().splitlines())
+    return frozenset(line for line in lines if line and not line.startswith("#"))
+
+
+def load_banned_words() -> set[str]:
+    """Words no text-built You may use as a bridge (garments, colors, fabrics, patterns,
+    style words), from the frozen `banned_words.txt`."""
+    return set(_banned_words())
 
 
 @dataclass(frozen=True)
