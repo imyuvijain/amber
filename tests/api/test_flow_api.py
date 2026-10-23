@@ -432,3 +432,59 @@ def test_results_route_shape(client, ctx):
     assert all(s["n"] == n - n // 2 for s in res["scores_late"])
     assert set(res["curves"]) == {s["you"] for s in res["scores_all"]}
     assert all(len(c) == n for c in res["curves"].values())
+
+
+# --- the Big Five quiz -------------------------------------------------------------
+
+
+def test_get_ipip_returns_twenty_items_in_file_order(client):
+    from amber.yous.bigfive import load_ipip
+
+    items = client.get("/api/ipip").json()["items"]
+    assert items == [{"id": i.id, "text": i.text} for i in load_ipip()]
+
+
+def test_ipip_answers_are_saved(client, ctx):
+    from amber.store.db import get_answers
+
+    uid = _new_user(client)
+    answers = {"e1": 5, "a1": 1, "n2": 3}
+    r = client.put(f"/api/users/{uid}/ipip", json={"answers": answers})
+    assert r.status_code == 200 and r.json() == {"answered": 3}
+    assert get_answers(ctx.conn, uid, "ipip") == {k: str(v) for k, v in answers.items()}
+
+
+def test_ipip_accepts_an_empty_skip(client, ctx):
+    uid = _new_user(client)
+    r = client.put(f"/api/users/{uid}/ipip", json={"answers": {}})
+    assert r.json() == {"answered": 0}
+
+
+def test_ipip_rejects_unknown_items_and_bad_values(client, ctx):
+    from amber.store.db import get_answers
+
+    uid = _new_user(client)
+    for bad in ({"zz": 3}, {"e1": 0}, {"e1": 6}, {"e1": 2, "x": 1}):
+        r = client.put(f"/api/users/{uid}/ipip", json={"answers": bad})
+        assert r.status_code == 422
+    assert get_answers(ctx.conn, uid, "ipip") == {}
+    ghost = "f" * 32
+    assert (
+        client.put(f"/api/users/{ghost}/ipip", json={"answers": {}}).status_code == 404
+    )
+
+
+def test_full_flow_with_quiz_scores_bigfive(client, ctx):
+    from amber.yous.bigfive import load_ipip
+
+    uid = _new_user(client, **MEN_APPAREL)
+    answers = {i.id: (5 if i.keyed == 1 else 1) for i in load_ipip()}
+    client.put(f"/api/users/{uid}/ipip", json={"answers": answers})
+    _play(client, uid, "train", domain="art")
+    _play(client, uid, "showdown")
+    from amber.store.db import list_choices
+
+    choices = list_choices(ctx.conn, uid, "clothes", "showdown")
+    assert choices
+    for c in choices:
+        assert "bigfive" in get_predictions(ctx.conn, c.pair_id)
