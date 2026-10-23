@@ -1,0 +1,68 @@
+# Big Five -> clothing bridge: four adjectives per trait pole (Big Five you input).
+# FROZEN INPUT: versioned with git tag prereg-v1; do not edit after the first real run.
+# Each pole becomes three prompts, "clothing worn by someone who is {a}, {b} and {c}", over
+# rotations of its list; a trait's direction is text_direction(high) - text_direction(low).
+# Sources:
+#   Saucier, G. (1994). Mini-Markers: A brief version of Goldberg's unipolar Big-Five markers.
+#     Journal of Personality Assessment, 63(3), 506-516.
+#   Goldberg, L. R. (1992). The development of markers for the Big-Five factor structure.
+#     Psychological Assessment, 4(1), 26-42.
+# Every adjective is a Saucier Mini-Marker of that pole, except those marked "# Goldberg (1992)":
+# those fill slots where a Mini-Marker is banned as a clothing/style word (bold, relaxed, warm,
+# cold) or where the pole has fewer than four Mini-Markers (N low, O low). Each fill is a
+# Goldberg (1992) unipolar marker of the same pole. No adjective is in banned_words.txt.
+E:
+  high:
+    - talkative
+    - energetic
+    - extraverted
+    - assertive  # Goldberg (1992)
+  low:
+    - shy
+    - quiet
+    - bashful
+    - withdrawn
+A:
+  high:
+    - kind
+    - sympathetic
+    - cooperative
+    - considerate  # Goldberg (1992)
+  low:
+    - harsh
+    - rude
+    - unsympathetic
+    - uncooperative  # Goldberg (1992)
+C:
+  high:
+    - organized
+    - efficient
+    - systematic
+    - practical
+  low:
+    - disorganized
+    - careless
+    - inefficient
+    - sloppy
+N:
+  high:
+    - moody
+    - temperamental
+    - touchy
+    - fretful
+  low:
+    - unenvious
+    - unexcitable  # Goldberg (1992)
+    - imperturbable  # Goldberg (1992)
+    - patient  # Goldberg (1992)
+O:
+  high:
+    - creative
+    - imaginative
+    - philosophical
+    - complex
+  low:
+    - uncreative
+    - unintellectual
+    - unimaginative  # Goldberg (1992)
+    - shallow  # Goldberg (1992)
