@@ -35,7 +35,7 @@
   color: var(--muted);
 }
 
-/* The one orchestrated moment: the five beads drop into place, once. */
+/* The one orchestrated moment: the four beads drop into place, once. */
 @keyframes drop {
   from {
     opacity: 0;
