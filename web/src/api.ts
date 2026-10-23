@@ -103,6 +103,18 @@ export const getStyleWords = () => request<{ rows: string[][] }>('GET', '/api/st
 export const putStyle = (uid: string, words: string[]) =>
   request<Record<string, never>>('PUT', `/api/users/${uid}/style`, { words })
 
+/** One Mini-IPIP statement; the player rates it 1 (Very inaccurate) to 5 (Very accurate). */
+export interface IpipItem {
+  id: string
+  text: string
+}
+
+export const getIpip = () => request<{ items: IpipItem[] }>('GET', '/api/ipip')
+
+/** Saves whatever was answered; a skipped quiz sends fewer (even zero) answers. */
+export const putIpip = (uid: string, answers: Record<string, number>) =>
+  request<{ answered: number }>('PUT', `/api/users/${uid}/ipip`, { answers })
+
 export const nextPair = (uid: string, domain: Domain, phase: Phase) =>
   request<Pair | Finished>('POST', `/api/users/${uid}/next`, { domain, phase })
 
