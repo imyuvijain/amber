@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, getIpip, putIpip, type IpipItem } from "../api";
 import "../components/Form.css";
 import "./Quiz.css";
@@ -19,8 +19,6 @@ export default function Quiz({ userId, advance }: ScreenProps) {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const answersRef = useRef(answers);
-  answersRef.current = answers;
 
   useEffect(() => {
     let live = true;
@@ -60,12 +58,12 @@ export default function Quiz({ userId, advance }: ScreenProps) {
     (value: number) => {
       if (!items || busy) return;
       const item = items[index];
-      const next = { ...answersRef.current, [item.id]: value };
+      const next = { ...answers, [item.id]: value };
       setAnswers(next);
       if (index < items.length - 1) setIndex(index + 1);
       else void submit(next);
     },
-    [items, index, busy, submit],
+    [items, index, answers, busy, submit],
   );
 
   // Keys 1-5 answer, like tapping.
