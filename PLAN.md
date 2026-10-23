@@ -1138,7 +1138,7 @@ def test_results_route_shape(client, finished_user): ...
 - [x] **Step 2: Run the tests and confirm they fail.** `uv run pytest -q` — new tests FAIL; then update or delete each old-flow test the change obsoletes (list them in the commit message).
 - [x] **Step 3: Implement** config, registry, revealed, flow, metrics, API, then the web changes.
 - [x] **Step 4: Run the tests and confirm they pass.** `uv run pytest -q && npm --prefix web run build`
-- [ ] **Step 5: Browser check** (start both servers with `preview_start`): sections → describe → 20 art picks → 40 clothes picks with a live tally → results with four rows possible (stated, art, revealed now; bigfive after Task 16). Reload mid-pair resumes; a fast double-click records one answer. Screenshot the results.
+- [x] **Step 5: Browser check** (start both servers with `preview_start`): sections → describe → 20 art picks → 40 clothes picks with a live tally → results with four rows possible (stated, art, revealed now; bigfive after Task 16). Reload mid-pair resumes; a fast double-click records one answer. Screenshot the results.
 - [x] **Step 6: Commit** in small commits (see Global Constraints), push.
 
 ### Task 15: Stated you from tapped style words
