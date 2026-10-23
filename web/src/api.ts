@@ -98,8 +98,10 @@ export const createUser = (name: string) =>
 export const setFilters = (uid: string, genders: string[], sections: string[]) =>
   request<{ allowed: number }>('PUT', `/api/users/${uid}/filters`, { genders, sections })
 
-export const setDescribe = (uid: string, text: string) =>
-  request<Record<string, never>>('PUT', `/api/users/${uid}/describe`, { text })
+export const getStyleWords = () => request<{ rows: string[][] }>('GET', '/api/style-words')
+
+export const putStyle = (uid: string, words: string[]) =>
+  request<Record<string, never>>('PUT', `/api/users/${uid}/style`, { words })
 
 export const nextPair = (uid: string, domain: Domain, phase: Phase) =>
   request<Pair | Finished>('POST', `/api/users/${uid}/next`, { domain, phase })
