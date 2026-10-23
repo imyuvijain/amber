@@ -1,3 +1,4 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
@@ -51,7 +52,7 @@ def _play(client, uid, phase, choose="a", domain="clothes") -> list[dict]:
 def test_full_flow_api(client, ctx):
     uid = client.post("/api/users", json={"name": "y"}).json()["user_id"]
     client.put(f"/api/users/{uid}/filters", json=MEN_APPAREL)
-    client.put(f"/api/users/{uid}/describe", json={"text": "I like red."})
+    client.put(f"/api/users/{uid}/style", json={"words": ["minimal"]})
     assert len(_play(client, uid, "train", domain="art")) == 6
     assert len(_play(client, uid, "showdown")) == 6
     res = client.get(f"/api/users/{uid}/results").json()
@@ -229,7 +230,7 @@ def test_choose_errors(client):
 
 def test_reveal_marks_which_yous_sided_with_the_pick(client, ctx):
     uid = _new_user(client, **MEN_APPAREL)
-    client.put(f"/api/users/{uid}/describe", json={"text": "I like red."})
+    client.put(f"/api/users/{uid}/style", json={"words": ["minimal"]})
     _play(client, uid, "train", domain="art")
     for chosen in ("a", "b"):
         r = _next(client, uid).json()
@@ -301,7 +302,7 @@ def test_unknown_user_is_404(client):
     assert _next(client, ghost).status_code == 404
     assert client.get(f"/api/users/{ghost}/results").status_code == 404
     assert (
-        client.put(f"/api/users/{ghost}/describe", json={"text": "x"}).status_code
+        client.put(f"/api/users/{ghost}/style", json={"words": ["minimal"]}).status_code
         == 404
     )
     assert (
@@ -309,15 +310,42 @@ def test_unknown_user_is_404(client):
     )
 
 
-def test_describe_is_saved(client, ctx):
+def test_style_words_are_saved(client, ctx):
     uid = _new_user(client)
-    assert (
-        client.put(f"/api/users/{uid}/describe", json={"text": "I like red."}).json()
-        == {}
-    )
+    words = ["minimal", "earthy"]
+    assert client.put(f"/api/users/{uid}/style", json={"words": words}).json() == {}
     from amber.store.db import get_answers
 
-    assert get_answers(ctx.conn, uid, "describe") == {"text": "I like red."}
+    assert get_answers(ctx.conn, uid, "stated") == {"words": json.dumps(words)}
+
+
+def test_style_rejects_zero_six_and_unknown_words(client, ctx):
+    from amber.store.db import get_answers
+    from amber.yous.stated import load_style_words
+
+    uid = _new_user(client)
+    six = load_style_words()[:6]
+    for bad in ([], six, ["minimal", "not-a-style-word"]):
+        r = client.put(f"/api/users/{uid}/style", json={"words": bad})
+        assert r.status_code == 422
+    assert get_answers(ctx.conn, uid, "stated") == {}
+    five = load_style_words()[:5]
+    assert client.put(f"/api/users/{uid}/style", json={"words": five}).status_code == 200
+
+
+def test_get_style_words_returns_five_rows_of_six(client):
+    from amber.yous.stated import load_style_words
+
+    rows = client.get("/api/style-words").json()["rows"]
+    assert [len(r) for r in rows] == [6] * 5
+    assert [w for r in rows for w in r] == load_style_words()
+
+
+def test_describe_route_is_gone(client):
+    uid = _new_user(client)
+    assert (
+        client.put(f"/api/users/{uid}/describe", json={"text": "x"}).status_code in (404, 405)
+    )
 
 
 def test_results_before_any_clothes_pick(client):

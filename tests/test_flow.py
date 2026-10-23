@@ -194,7 +194,7 @@ def test_yous_stay_frozen_through_the_clothes_phase(ctx, user):
     play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
     play_clothes(ctx, user, prefer="blue", n=1)
     frozen = load_yous(ctx.conn, user)
-    save_answer(ctx.conn, user, "describe", "text", "I love blue things.")
+    save_answer(ctx.conn, user, "stated", "words", json.dumps(["blue"]))
     play_clothes(ctx, user, prefer="blue", n=8)
     after = load_yous(ctx.conn, user)
     assert set(after) == set(frozen) == set(FROZEN_YOUS) & set(BUILDERS)
