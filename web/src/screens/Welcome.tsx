@@ -3,12 +3,14 @@ import { ApiError, createUser } from '../api'
 import { YOUS } from '../yous'
 import './Welcome.css'
 
+// No typing in the flow: the API still wants a name, so every player is just "player".
+const PLAYER_NAME = 'player'
+
 interface Props {
   onCreated: (userId: string) => void
 }
 
 export default function Welcome({ onCreated }: Props) {
-  const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,7 +20,7 @@ export default function Welcome({ onCreated }: Props) {
     setBusy(true)
     setError(null)
     try {
-      const { user_id } = await createUser(name.trim() || 'Anonymous')
+      const { user_id } = await createUser(PLAYER_NAME)
       onCreated(user_id)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
@@ -52,20 +54,9 @@ export default function Welcome({ onCreated }: Props) {
       </ul>
 
       <form className="start" onSubmit={submit}>
-        <label htmlFor="name">What should we call you?</label>
-        <div className="start-row">
-          <input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="A first name is fine"
-            autoComplete="given-name"
-            maxLength={60}
-          />
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? 'Starting…' : 'Start'}
-          </button>
-        </div>
+        <button className="btn" type="submit" disabled={busy}>
+          {busy ? 'Starting…' : 'Start'}
+        </button>
         {error && (
           <p className="error" role="alert">
             {error}
