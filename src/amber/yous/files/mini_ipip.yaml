@@ -1,0 +1,31 @@
+# Mini-IPIP: the 20-item short form of the IPIP Big Five (Big Five you input).
+# FROZEN INPUT: versioned with git tag prereg-v1; do not edit after the first real run.
+# Source: Donnellan, M. B., Oswald, F. L., Baird, B. M., & Lucas, R. E. (2006). The Mini-IPIP
+#   scales: Tiny-yet-effective measures of the Big Five factors of personality.
+#   Psychological Assessment, 18(2), 192-203. IPIP items are in the public domain (ipip.ori.org).
+# Traits: E Extraversion, A Agreeableness, C Conscientiousness, N Neuroticism,
+#   O Intellect/Imagination (Openness). keyed: 1 = plus-keyed, -1 = reverse-keyed (6 - x).
+# Listed (and shown to the player) interleaved E, A, C, N, O, as in the published scale.
+# Answers: 1 Very inaccurate, 2 Moderately inaccurate, 3 Neither, 4 Moderately accurate,
+#   5 Very accurate.
+items:
+  - {id: e1, trait: E, keyed: 1, text: "Am the life of the party"}
+  - {id: a1, trait: A, keyed: 1, text: "Sympathize with others' feelings"}
+  - {id: c1, trait: C, keyed: 1, text: "Get chores done right away"}
+  - {id: n1, trait: N, keyed: 1, text: "Have frequent mood swings"}
+  - {id: o1, trait: O, keyed: 1, text: "Have a vivid imagination"}
+  - {id: e2, trait: E, keyed: -1, text: "Don't talk a lot"}
+  - {id: a2, trait: A, keyed: -1, text: "Am not interested in other people's problems"}
+  - {id: c2, trait: C, keyed: -1, text: "Often forget to put things back in their proper place"}
+  - {id: n2, trait: N, keyed: -1, text: "Am relaxed most of the time"}
+  - {id: o2, trait: O, keyed: -1, text: "Am not interested in abstract ideas"}
+  - {id: e3, trait: E, keyed: 1, text: "Talk to a lot of different people at parties"}
+  - {id: a3, trait: A, keyed: 1, text: "Feel others' emotions"}
+  - {id: c3, trait: C, keyed: 1, text: "Like order"}
+  - {id: n3, trait: N, keyed: 1, text: "Get upset easily"}
+  - {id: o3, trait: O, keyed: -1, text: "Have difficulty understanding abstract ideas"}
+  - {id: e4, trait: E, keyed: -1, text: "Keep in the background"}
+  - {id: a4, trait: A, keyed: -1, text: "Am not really interested in others"}
+  - {id: c4, trait: C, keyed: -1, text: "Make a mess of things"}
+  - {id: n4, trait: N, keyed: -1, text: "Seldom feel blue"}
+  - {id: o4, trait: O, keyed: -1, text: "Do not have a good imagination"}
