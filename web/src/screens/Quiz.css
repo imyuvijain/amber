@@ -1,0 +1,89 @@
+/* One statement at a time; five big tap targets that stack on phones. */
+.quiz-screen {
+  max-width: 46rem;
+}
+
+.quiz-card {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.quiz-progress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.quiz-statement {
+  font-size: clamp(1.4rem, 1rem + 1.6vw, 2rem);
+  font-weight: 650;
+  line-height: 1.2;
+  min-height: 2.4em;
+}
+
+.quiz-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.6rem;
+}
+
+.quiz-option {
+  appearance: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  min-height: 5.5rem;
+  padding: 0.6rem 0.4rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  transition: box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.quiz-option:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.quiz-option:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.quiz-option[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2.5px var(--you-bigfive);
+}
+
+.quiz-option:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+.quiz-key {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .quiz-card {
+    padding: 1.1rem;
+  }
+  .quiz-scale {
+    grid-template-columns: 1fr;
+  }
+  .quiz-option {
+    min-height: 3.4rem;
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: 0.8rem;
+    padding: 0 1rem;
+  }
+}
