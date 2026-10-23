@@ -1,0 +1,127 @@
+# Banned words: no Big Five bridge adjective (bigfive_bridge.yaml) may be one of these.
+# FROZEN INPUT: versioned with git tag prereg-v1; do not edit after the first real run.
+# They name clothing itself (garments, colors, fabrics, patterns) or a style word the Stated
+# you already uses, so a bridge adjective built from them would describe clothes, not a person.
+# One word or phrase per line, lowercase. Lines starting with # are comments.
+# garments
+shirt
+t-shirt
+tshirt
+top
+blouse
+sweater
+jumper
+hoodie
+cardigan
+jacket
+coat
+blazer
+suit
+vest
+dress
+skirt
+trousers
+pants
+jeans
+shorts
+leggings
+kurta
+saree
+scarf
+tie
+hat
+cap
+shoe
+shoes
+sneakers
+boots
+heels
+sandals
+flats
+loafers
+bag
+belt
+socks
+# colors and tones
+red
+orange
+yellow
+green
+blue
+navy
+purple
+pink
+brown
+beige
+black
+white
+grey
+gray
+gold
+silver
+pastel
+neon
+bright
+muted
+warm
+cool
+cold
+deep
+light
+dark
+# fabrics
+cotton
+denim
+linen
+silk
+wool
+leather
+suede
+velvet
+satin
+polyester
+cashmere
+knit
+lace
+# patterns
+striped
+plaid
+checked
+floral
+polka dot
+paisley
+camo
+graphic
+solid
+printed
+# style words (style_words.yaml)
+minimal
+classic
+edgy
+sporty
+bohemian
+preppy
+streetwear
+vintage
+elegant
+relaxed
+bold
+earthy
+monochrome
+colorful
+romantic
+utilitarian
+casual
+tailored
+oversized
+sleek
+rugged
+playful
+understated
+glamorous
+cozy
+retro
+modern
+ethnic
+athleisure
+smart casual
