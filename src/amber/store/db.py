@@ -17,7 +17,7 @@ import numpy as np
 
 Domain = Literal["clothes", "art"]
 Phase = Literal["train", "showdown", "retest"]
-AnswerKind = Literal["describe", "filters", "ipip"]
+AnswerKind = Literal["describe", "stated", "filters", "ipip"]
 
 
 class StoreError(Exception):
