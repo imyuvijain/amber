@@ -1,0 +1,35 @@
+/* Six chips per row on one line at desktop widths; below 600px the rows dissolve into
+   one wrapping container so no chip sits alone on a line. */
+.style-screen {
+  max-width: 54rem;
+}
+
+.style-rows {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.style-rows .chips-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.6rem;
+}
+
+.style-rows .chip {
+  padding: 0 0.5rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .style-rows {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .style-rows .chips-row {
+    display: contents;
+  }
+  .style-rows .chip {
+    padding: 0 1.1rem;
+  }
+}
