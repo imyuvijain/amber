@@ -1,0 +1,9 @@
+# Style words the player taps to describe their own style (Stated You input).
+# FROZEN INPUT: versioned with git tag prereg-v1; do not edit after the first real run.
+# Five display rows of six. Single words or two-word phrases; no brand names.
+rows:
+  - [minimal, classic, edgy, sporty, bohemian, preppy]
+  - [streetwear, vintage, elegant, relaxed, bold, earthy]
+  - [monochrome, colorful, romantic, utilitarian, casual, tailored]
+  - [oversized, sleek, rugged, playful, understated, glamorous]
+  - [cozy, retro, modern, ethnic, athleisure, smart casual]
