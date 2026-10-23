@@ -1,7 +1,5 @@
 from datetime import UTC, datetime
 
-import pytest
-
 from amber.eval.metrics import Score, learning_curve, score_showdown
 from amber.store.db import Choice
 from amber.yous.base import YOU_ORDER
@@ -41,9 +39,23 @@ def test_score_counts_abstain_as_half():
     assert s["stated"].n == 4 and s["revealed"].n == 4
 
 
-def test_wrong_side_scores_one_minus_p():
+def test_wrong_side_scores_zero():
     s = _by_you(score_showdown([_choice(0, chose_a=False)], {"p0": {"stated": 0.8}}))
-    assert s["stated"].correct == pytest.approx(0.2)
+    assert s["stated"].correct == 0.0
+
+
+def test_soft_predictions_earn_full_credit_when_the_call_is_right():
+    # revealed saves soft P(a) from p_prefer; only the side of 0.5 counts
+    choices = [_choice(0), _choice(1, chose_a=False), _choice(2), _choice(3)]
+    preds = {
+        "p0": {"revealed": 0.7},  # called a, chose a: right
+        "p1": {"revealed": 0.3},  # called b, chose b: right
+        "p2": {"revealed": 0.7},  # called a, chose a: right
+        "p3": {"revealed": 0.3},  # called b, chose a: wrong
+    }
+    s = _by_you(score_showdown(choices, preds))["revealed"]
+    assert s.correct == 3.0 and s.accuracy == 0.75
+    assert learning_curve(choices, preds, "revealed", size=4)[-1] == 0.75
 
 
 def test_results_follow_you_order_and_only_present_yous():

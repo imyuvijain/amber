@@ -12,7 +12,7 @@ from amber.yous.base import YOU_ORDER
 @dataclass(frozen=True)
 class Score:
     you: str
-    correct: float  # sum of per-pair credit; an abstention earns 0.5 per pair
+    correct: float  # picks called right (hard call, 1 each); an abstention earns 0.5 per pair
     n: int  # pairs scored
     accuracy: float  # correct / n
     ci_low: float  # 95% percentile bootstrap over pairs
@@ -20,7 +20,15 @@ class Score:
 
 
 def _credit(c: Choice, p: float) -> float:
-    return p if c.chosen_id == c.a_id else 1.0 - p
+    """Credit for a You's hard call: it predicts `a` when `p > 0.5` and `b` when `p < 0.5`.
+
+    1 if the call matches the pick, 0 if not, 0.5 when `p == 0.5` (an abstention). Stored
+    predictions stay soft `P(a)`; only the credit is hard, so a soft Revealed and the 0/1
+    frozen Yous are compared on the same footing ("accuracy" = fraction of picks called right).
+    """
+    if p == 0.5:
+        return 0.5
+    return 1.0 if (p > 0.5) == (c.chosen_id == c.a_id) else 0.0
 
 
 def score_showdown(
@@ -32,8 +40,9 @@ def score_showdown(
 ) -> list[Score]:
     """Score every You that has predictions, in `YOU_ORDER`.
 
-    `predictions` maps `pair_id` to `{you: P(a)}`. A pair earns `P(a)` when `a` was chosen
-    and `1 - P(a)` otherwise, so a prediction of exactly 0.5 earns 0.5. Unanswered pairs and
+    `predictions` maps `pair_id` to `{you: P(a)}`. A pair earns 1 when the You's hard call
+    (`P(a) > 0.5` means `a`, `< 0.5` means `b`) matches the pick, 0 when it does not, and 0.5
+    for exactly 0.5 (abstain). Unanswered pairs and
     pairs without a prediction from a You are skipped for that You. The interval is a 95%
     percentile bootstrap (`n_boot` resamples of the pairs, `np.random.default_rng(seed)`).
 
