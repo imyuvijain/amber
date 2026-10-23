@@ -1,6 +1,7 @@
 import json
 
-from fakes import red_and_blue_centered
+import numpy as np
+from fakes import play_art, play_clothes, red_and_blue_centered
 
 from amber.store.db import save_answer
 from amber.yous.base import predict
@@ -40,3 +41,15 @@ def test_stated_prefers_red_items_when_the_word_is_red(ctx, user):
 def test_stated_ignores_the_old_describe_text(ctx, user):
     save_answer(ctx.conn, user, "describe", "text", "I love red clothes.")
     assert build_stated(ctx.conn, user, ctx).meta == {"reason": "no words"}
+
+
+def test_stated_ignores_clothing_picks(ctx, user):
+    # Leak rule. Unlike build_art_taste, build_stated takes no choices argument to reject,
+    # so the rule is checked by invariance: clothes picks leave the result unchanged.
+    _words(ctx, user, ["red"])
+    play_art(ctx, user, prefer="red", n=ctx.settings.art_train_pairs)
+    before = build_stated(ctx.conn, user, ctx)
+    play_clothes(ctx, user, prefer="blue", n=8)
+    after = build_stated(ctx.conn, user, ctx)
+    assert after.meta == before.meta == {"words": ["red"]}
+    assert np.array_equal(after.w, before.w)
