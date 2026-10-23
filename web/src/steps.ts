@@ -9,7 +9,7 @@ export interface Step {
 export const STEPS: readonly Step[] = [
   { id: 'welcome', label: 'Start' },
   { id: 'sections', label: 'Sections' },
-  { id: 'describe', label: 'Describe' },
+  { id: 'style', label: 'Style' },
   { id: 'art', label: 'Art' },
   { id: 'clothes', label: 'Clothes' },
   { id: 'results', label: 'Results' },
