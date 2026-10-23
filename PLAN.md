@@ -1159,7 +1159,7 @@ def test_results_route_shape(client, finished_user): ...
 - [x] **Step 1: Write the failing tests** (abstains with no words; red-word direction prefers the red item via `red_and_blue_centered`; route rejects 0, 6, and unknown words; leak rule still raises).
 - [x] **Step 2: Confirm they fail.** `uv run pytest tests/yous/test_stated.py tests/api -q`
 - [x] **Step 3: Implement**, replace the Describe step with StyleWords in `steps.ts`, delete Describe and its route.
-- [ ] **Step 4: Confirm pass.** `uv run pytest -q && npm --prefix web run build`; browser-check the chips screen.
+- [x] **Step 4: Confirm pass.** `uv run pytest -q && npm --prefix web run build`; browser-check the chips screen.
 - [x] **Step 5: Commit** in small commits, push.
 
 ### Task 16: Big Five you (Mini-IPIP + Mini-Markers bridge), then freeze the inputs
