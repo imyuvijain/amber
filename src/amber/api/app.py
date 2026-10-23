@@ -35,7 +35,9 @@ from amber.store.db import (
     save_answer,
     user_exists,
 )
+from amber.yous.stated import load_style_words, load_style_words_rows
 
+MAX_STYLE_WORDS = 5
 WEB_DIST = REPO_ROOT / "web" / "dist"
 DEV_ORIGIN = "http://localhost:5173"
 _THUMB_NAME = re.compile(r"[0-9]+\.jpg")
@@ -51,8 +53,8 @@ class FiltersIn(BaseModel):
     sections: list[str]
 
 
-class DescribeIn(BaseModel):
-    text: str
+class StyleIn(BaseModel):
+    words: list[str]
 
 
 class NextIn(BaseModel):
@@ -128,11 +130,21 @@ def create_app(ctx: AppContext) -> FastAPI:
             save_answer(ctx.conn, uid, "filters", "sections", json.dumps(body.sections))
             return {"allowed": allowed}
 
-    @app.put("/api/users/{uid}/describe")
-    def put_describe(uid: str, body: DescribeIn) -> dict:
+    @app.get("/api/style-words")
+    def get_style_words() -> dict:
+        return {"rows": load_style_words_rows()}
+
+    @app.put("/api/users/{uid}/style")
+    def put_style(uid: str, body: StyleIn) -> dict:
         with lock:
             require_user(uid)
-            save_answer(ctx.conn, uid, "describe", "text", body.text)
+            if not 1 <= len(body.words) <= MAX_STYLE_WORDS:
+                raise HTTPException(422, f"pick 1 to {MAX_STYLE_WORDS} style words")
+            if len(set(body.words)) != len(body.words):
+                raise HTTPException(422, "each style word can be picked once")
+            if not set(body.words) <= set(load_style_words()):
+                raise HTTPException(422, "unknown style word")
+            save_answer(ctx.conn, uid, "stated", "words", json.dumps(body.words))
             return {}
 
     @app.post("/api/users/{uid}/next")
