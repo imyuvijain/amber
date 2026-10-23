@@ -84,6 +84,7 @@
 }
 
 .bar {
+  /* Same box and scale as .whisker (both are % of .row-plot), so no transform here. */
   position: absolute;
   left: 0;
   top: 50%;
@@ -91,8 +92,6 @@
   translate: 0 -50%;
   border-radius: 0 6px 6px 0;
   background: var(--c);
-  transform-origin: left;
-  animation: grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 /* Interval: a line with end caps, drawn in ink with a paper halo so it reads over the bar. */
@@ -150,16 +149,10 @@
   font-size: 0.95rem;
 }
 
-@keyframes grow {
-  from {
-    transform: scaleX(0);
-  }
-}
-
 @media (max-width: 40rem) {
   .chart {
     --name-w: 6.2rem;
-    --num-w: 2.8rem;
+    --num-w: 3.6rem;
   }
   .row-name {
     font-size: 0.9rem;
