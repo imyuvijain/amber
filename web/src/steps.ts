@@ -1,5 +1,4 @@
-// The flow, in order. Later tasks insert their steps (the quiz) before 'clothes' by adding an
-// entry here and a screen in App.tsx's SCREENS map.
+// The flow, in order. A new step is an entry here and a screen in App.tsx's SCREENS map.
 
 export interface Step {
   id: string
@@ -10,6 +9,7 @@ export const STEPS: readonly Step[] = [
   { id: 'welcome', label: 'Start' },
   { id: 'sections', label: 'Sections' },
   { id: 'style', label: 'Style' },
+  { id: 'quiz', label: 'Quiz' },
   { id: 'art', label: 'Art' },
   { id: 'clothes', label: 'Clothes' },
   { id: 'results', label: 'Results' },
