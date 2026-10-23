@@ -1180,7 +1180,7 @@ def test_results_route_shape(client, finished_user): ...
 - [x] **Step 1: Write the failing tests** (keying and reverse scoring; trait range; skip → abstain; bridge words never banned; a high-E fake person's `w` has positive cosine with E-high text direction; leak rule).
 - [x] **Step 2: Confirm they fail.** `uv run pytest tests/yous/test_bigfive.py -q`
 - [x] **Step 3: Write the YAML files and `banned_words.txt`, then implement** `bigfive.py`, routes, the Quiz screen.
-- [ ] **Step 4: Confirm pass**, then do a timed browser run of the whole flow and check it fits ≈ 4 minutes of tapping (excluding image load); record the time in the commit message.
+- [x] **Step 4: Confirm pass**, then do a timed browser run of the whole flow and check it fits ≈ 4 minutes of tapping (excluding image load); record the time in the commit message.
 - [ ] **Step 5: Freeze the inputs.** Show the user `style_words.yaml`, `mini_ipip.yaml`, `bigfive_bridge.yaml` and `banned_words.txt` for one last review. Then commit and `git tag prereg-v1` (the readout concept list in Task 17 joins as `prereg-v1.1`, noted in its commit).
 
 **Milestone, the real experiment:** play the full 4-minute flow for real for the first time.
