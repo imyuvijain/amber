@@ -1,6 +1,7 @@
 import { useCallback, useState, type ComponentType } from 'react'
 import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
+import Quiz from './screens/Quiz'
 import Scoreboard from './screens/Scoreboard'
 import Sections from './screens/Sections'
 import Showdown from './screens/Showdown'
@@ -14,6 +15,7 @@ import { isStepId, stepAfter } from './steps'
 const SCREENS: Record<string, ComponentType<ScreenProps>> = {
   sections: Sections,
   style: StyleWords,
+  quiz: Quiz,
   art: ThisOrThat,
   clothes: Showdown,
   results: Scoreboard,
