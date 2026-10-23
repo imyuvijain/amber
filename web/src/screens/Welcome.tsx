@@ -29,7 +29,7 @@ export default function Welcome({ onCreated }: Props) {
   return (
     <section className="welcome">
       <h1>
-        Five of you
+        Four of you
         <br />
         are about to bet
         <br />
@@ -37,11 +37,11 @@ export default function Welcome({ onCreated }: Props) {
       </h1>
       <p className="lede">
         Each one is a different guess at who you are. You answer a few questions, choose between
-        pairs of clothes, and then they predict your choices on pairs they have never seen. The
-        scoreboard shows which one knew you best.
+        artworks, and then make 40 clothing picks. Every one of those picks is predicted before
+        you make it. The scoreboard shows which one knew you best.
       </p>
 
-      <ul className="lineup" aria-label="The five Yous">
+      <ul className="lineup" aria-label="The four Yous">
         {YOUS.map((y, i) => (
           <li key={y.id} style={{ '--c': y.color, '--i': i } as CSSProperties}>
             <span className="bead" />
