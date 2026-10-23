@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from amber.yous.art_taste import build_art
 from amber.yous.base import You, YouName
+from amber.yous.bigfive import build_bigfive
 from amber.yous.revealed import build_revealed
 from amber.yous.stated import build_stated
 
@@ -19,6 +20,7 @@ Builder = Callable[[sqlite3.Connection, str, "AppContext"], You]
 
 BUILDERS: dict[YouName, Builder] = {
     "stated": build_stated,
+    "bigfive": build_bigfive,
     "art": build_art,
     "revealed": build_revealed,
 }
@@ -50,7 +52,7 @@ def build_frozen_yous(
     conn: sqlite3.Connection, user_id: str, ctx: "AppContext"
 ) -> dict[YouName, You]:
     """The Yous frozen before the first clothing pair: `FROZEN_YOUS` that have a builder
-    (so this works before `bigfive` lands). Failures isolate as in `build_all_yous`."""
+    (all three, now that `bigfive` is registered). Failures isolate as in `build_all_yous`."""
     return _run(FROZEN_YOUS, conn, user_id, ctx)
 
 
