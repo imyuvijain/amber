@@ -1,4 +1,4 @@
-"""FastAPI app: users, filters, the pair flow, choosing, results, thumbnails.
+"""FastAPI app: users, filters, style words, the quiz, pairs, choosing, results, thumbs.
 
 One sqlite connection is shared by every request, so every handler that touches it holds
 `lock` (sync handlers run in a threadpool). If `web/dist` exists it is served at `/`.
@@ -35,6 +35,7 @@ from amber.store.db import (
     save_answer,
     user_exists,
 )
+from amber.yous.bigfive import load_ipip, score_ipip
 from amber.yous.stated import load_style_words, load_style_words_rows
 
 MAX_STYLE_WORDS = 5
@@ -55,6 +56,10 @@ class FiltersIn(BaseModel):
 
 class StyleIn(BaseModel):
     words: list[str]
+
+
+class IpipIn(BaseModel):
+    answers: dict[str, int]
 
 
 class NextIn(BaseModel):
@@ -146,6 +151,24 @@ def create_app(ctx: AppContext) -> FastAPI:
                 raise HTTPException(422, "unknown style word")
             save_answer(ctx.conn, uid, "stated", "words", json.dumps(body.words))
             return {}
+
+    @app.get("/api/ipip")
+    def get_ipip() -> dict:
+        return {"items": [{"id": i.id, "text": i.text} for i in load_ipip()]}
+
+    @app.put("/api/users/{uid}/ipip")
+    def put_ipip(uid: str, body: IpipIn) -> dict:
+        """Saves whatever was answered; a skipped quiz sends fewer (or zero) answers and
+        the Big Five you abstains under 10."""
+        with lock:
+            require_user(uid)
+            try:
+                score_ipip(body.answers)  # validates ids and 1..5
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            for item_id, value in body.answers.items():
+                save_answer(ctx.conn, uid, "ipip", item_id, str(value))
+            return {"answered": len(body.answers)}
 
     @app.post("/api/users/{uid}/next")
     def post_next(uid: str, body: NextIn) -> dict:
