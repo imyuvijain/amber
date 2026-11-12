@@ -1,0 +1,131 @@
+# Style concepts used to describe a You in words (the readout: "you said... you pick...").
+# FROZEN INPUT: joins git tag prereg-v1.1; do not edit after the first real run.
+# A superset of the 30 style words in yous/files/style_words.yaml. This is a description
+# list, not a bridge, so colours, textures and moods are fine. No brand names.
+concepts:
+  # the 30 style words
+  - minimal
+  - classic
+  - edgy
+  - sporty
+  - bohemian
+  - preppy
+  - streetwear
+  - vintage
+  - elegant
+  - relaxed
+  - bold
+  - earthy
+  - monochrome
+  - colorful
+  - romantic
+  - utilitarian
+  - casual
+  - tailored
+  - oversized
+  - sleek
+  - rugged
+  - playful
+  - understated
+  - glamorous
+  - cozy
+  - retro
+  - modern
+  - traditional
+  - athleisure
+  - smart casual
+  # silhouette and fit
+  - fitted
+  - structured
+  - flowy
+  - layered
+  - slouchy
+  - cropped
+  - boxy
+  - draped
+  - crisp
+  - chunky
+  - delicate
+  # mood and attitude
+  - polished
+  - refined
+  - sophisticated
+  - dressy
+  - formal
+  - business
+  - workwear
+  - outdoorsy
+  - rustic
+  - artsy
+  - quirky
+  - feminine
+  - masculine
+  - androgynous
+  - dainty
+  - luxe
+  - dramatic
+  - effortless
+  - timeless
+  - trendy
+  - futuristic
+  - nostalgic
+  - dreamy
+  - rebellious
+  - calm
+  - cheerful
+  - mysterious
+  # subcultures and occasions
+  - grunge
+  - punk
+  - goth
+  - western
+  - nautical
+  - tropical
+  - festival
+  # colours and tones
+  - red
+  - blue
+  - green
+  - yellow
+  - orange
+  - pink
+  - purple
+  - brown
+  - beige
+  - black
+  - white
+  - grey
+  - navy
+  - olive
+  - burgundy
+  - teal
+  - cream
+  - camel
+  - pastel
+  - neon
+  - bright
+  - dark
+  - muted
+  - neutral
+  # textures, fabrics and patterns
+  - textured
+  - soft
+  - floral
+  - striped
+  - plaid
+  - polka dot
+  - animal print
+  - geometric
+  - embroidered
+  - lace
+  - denim
+  - leather
+  - knit
+  - linen
+  - silk
+  - velvet
+  - sequined
+  - metallic
+  - tie-dye
+  - patterned
+  - plain
