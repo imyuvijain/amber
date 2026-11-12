@@ -355,6 +355,15 @@ def test_results_before_any_clothes_pick(client):
         "scores_late": [],
         "curves": {},
         "n_clothes": 0,
+        "cosines": {},
+        "map": {"points": [], "yous": []},
+        "readout": {
+            "said": [],
+            "picks": [],
+            "art_says": [],
+            "surprises": [],
+            "sentences": [],
+        },
     }
 
 
@@ -423,7 +432,15 @@ def test_results_route_shape(client, ctx):
     n = ctx.settings.clothes_pairs
     assert len(_play(client, uid, "showdown")) == n
     res = client.get(f"/api/users/{uid}/results").json()
-    assert set(res) == {"scores_all", "scores_late", "curves", "n_clothes"}
+    assert set(res) == {
+        "scores_all",
+        "scores_late",
+        "curves",
+        "n_clothes",
+        "cosines",
+        "map",
+        "readout",
+    }
     assert res["n_clothes"] == n
     assert {s["you"] for s in res["scores_all"]} >= {"stated", "art", "revealed"}
     for s in res["scores_all"]:
@@ -432,6 +449,22 @@ def test_results_route_shape(client, ctx):
     assert all(s["n"] == n - n // 2 for s in res["scores_late"])
     assert set(res["curves"]) == {s["you"] for s in res["scores_all"]}
     assert all(len(c) == n for c in res["curves"].values())
+    live = res["cosines"]
+    assert "revealed" in live and "stated" not in live  # no style words picked: abstains
+    assert live["art"]["revealed"] == live["revealed"]["art"]
+    points = res["map"]["points"]
+    assert {p["domain"] for p in points} == {"clothes", "art"}
+    allowed = allowed_ids(ctx.conn, uid, ctx)
+    assert {p["id"] for p in points if p["domain"] == "clothes"} <= allowed
+    assert {m["you"] for m in res["map"]["yous"]} == set(live)
+    assert set(res["readout"]) == {
+        "said",
+        "picks",
+        "art_says",
+        "surprises",
+        "sentences",
+    }
+    assert res["readout"]["art_says"] and res["readout"]["sentences"]
 
 
 # --- the Big Five quiz -------------------------------------------------------------
