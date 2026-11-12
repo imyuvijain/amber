@@ -293,6 +293,7 @@ def create_app(ctx: AppContext) -> FastAPI:
         return {
             "retest_due_at": None if due_at is None else due_at.isoformat(),
             "retest_due": retest_due(ctx.conn, uid, settings, clock),
+            "retest_pairs": settings.retest_pairs,
             "ceiling": ceiling,
             "normalized": {}
             if ceiling is None

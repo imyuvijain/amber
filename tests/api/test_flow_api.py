@@ -370,6 +370,7 @@ def test_results_before_any_clothes_pick(client):
         },
         "retest_due_at": None,
         "retest_due": False,
+        "retest_pairs": 2,
         "ceiling": None,
         "normalized": {},
     }
@@ -450,6 +451,7 @@ def test_results_route_shape(client, ctx):
         "readout",
         "retest_due_at",
         "retest_due",
+        "retest_pairs",
         "ceiling",
         "normalized",
     }
