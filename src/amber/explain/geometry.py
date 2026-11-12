@@ -15,17 +15,20 @@ from amber.yous.base import You
 
 MAP_CLOTHES = 300
 MAP_ART = 100
-_EPS = 1e-9
+_EPS = 1e-6  # a direction shorter than this is float32 noise, not a direction
 
 
 def you_cosines(yous: dict[str, You]) -> dict[str, dict[str, float]]:
-    """`{a: {b: cosine(w_a, w_b)}}` over the Yous that have a direction (abstainers are left out)."""
-    live = {
-        name: np.asarray(y.w, dtype=np.float64)
-        for name, y in yous.items()
-        if y.w is not None
+    """`{a: {b: cosine(w_a, w_b)}}` over the Yous that have a direction (abstainers and zero-length directions are left out)."""
+    norms = {
+        name: float(np.linalg.norm(y.w)) for name, y in yous.items() if y.w is not None
     }
-    unit = {name: w / np.linalg.norm(w) for name, w in live.items()}
+    unit = {
+        name: np.asarray(yous[name].w, dtype=np.float64) / norm
+        for name, norm in norms.items()
+        if norm
+        >= _EPS  # a (near-)zero w has no direction: skip it rather than emit NaN
+    }
     return {a: {b: float(unit[a] @ unit[b]) for b in unit} for a in unit}
 
 

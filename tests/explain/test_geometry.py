@@ -38,6 +38,16 @@ def test_you_cosines_leaves_out_abstaining_yous():
     assert cos == {"stated": {"stated": pytest.approx(1.0)}}
 
 
+def test_you_cosines_skips_a_zero_direction_instead_of_returning_nan():
+    yous = {
+        "stated": _you("stated", _unit(1, 0)),
+        "art": _you("art", np.zeros(2, dtype=np.float32)),
+    }
+    cos = you_cosines(yous)
+    assert set(cos) == {"stated"}
+    assert all(np.isfinite(v) for row in cos.values() for v in row.values())
+
+
 def test_sample_ids_is_seeded_sorted_and_capped():
     ids = [f"c:{i}" for i in range(50)]
     a = sample_ids(ids, 10)
