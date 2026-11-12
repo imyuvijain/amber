@@ -6,7 +6,7 @@
 
 .results h1 {
   font-size: clamp(2.1rem, 1rem + 5vw, 3.8rem);
-  max-width: 18ch;
+  max-width: 22ch;
 }
 .results h2 {
   font-size: clamp(1.5rem, 1rem + 1.6vw, 2.1rem);
@@ -23,8 +23,10 @@
   gap: 0.9rem;
 }
 .headline .mark {
-  color: var(--c);
   font-variant-numeric: tabular-nums;
+}
+.headline .mark[data-verdict='win'] {
+  color: var(--c);
 }
 .ci {
   color: var(--muted);
@@ -71,6 +73,10 @@
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.scroll-x {
+  overflow-x: auto;
 }
 
 .cosines {

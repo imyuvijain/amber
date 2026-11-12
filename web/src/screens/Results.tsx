@@ -18,6 +18,14 @@ function headliner(results: ResultsData): Score | undefined {
     .sort((a, b) => b.accuracy - a.accuracy)[0]
 }
 
+/** Only a score whose 95% range clears 50% is a win; one that sits wholly below is worse than
+ *  guessing; anything else is indistinguishable from a coin flip. */
+function verdictOf(s: Score): 'win' | 'chance' | 'worse' {
+  if (s.ci_low > 0.5) return 'win'
+  if (s.ci_high < 0.5) return 'worse'
+  return 'chance'
+}
+
 function Headline({ results }: { results: ResultsData }) {
   const lead = headliner(results)
   const n = results.n_clothes
@@ -32,12 +40,18 @@ function Headline({ results }: { results: ResultsData }) {
   const you = youById(lead.you)
   const subject = lead.you === 'art' ? 'Your art taste' : you.name
   const right = Math.round(lead.correct)
+  const verdict = verdictOf(lead)
   const others = results.scores_all.filter((s) => s.you !== lead.you)
   return (
     <header className="headline">
       <h1>
-        {subject} predicted <span style={{ '--c': you.color } as CSSProperties} className="mark">{right}</span> of
-        your {lead.n} picks
+        {subject} {verdict === 'win' ? 'predicted' : 'called'}{' '}
+        <span style={{ '--c': you.color } as CSSProperties} className="mark" data-verdict={verdict}>
+          {right}
+        </span>{' '}
+        of your {lead.n} picks
+        {verdict === 'chance' && ', about what a coin flip gets'}
+        {verdict === 'worse' && ', worse than a coin flip'}
       </h1>
       <p className="ci">
         95% range {Math.round(lead.ci_low * lead.n)}–{Math.round(lead.ci_high * lead.n)} of {lead.n}
@@ -91,6 +105,7 @@ function Cosines({ cosines }: { cosines: ResultsData['cosines'] }) {
         Cosine between each pair of directions: 1 means the same taste, 0 unrelated, negative
         opposed.
       </p>
+      <div className="scroll-x">
       <table className="cosines">
         <thead>
           <tr>
@@ -126,6 +141,7 @@ function Cosines({ cosines }: { cosines: ResultsData['cosines'] }) {
           ))}
         </tbody>
       </table>
+      </div>
       {missing.length > 0 && (
         <p className="note">Left out, nothing to go on: {missing.map((y) => y.name).join(', ')}.</p>
       )}
