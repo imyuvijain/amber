@@ -2,6 +2,8 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from fakes import play_clothes, preds
+
 from amber.eval.retest import (
     RetestNotDue,
     next_retest_pair,
@@ -9,8 +11,6 @@ from amber.eval.retest import (
     retest_due_at,
     retest_plan,
 )
-from fakes import play_clothes, preds
-
 from amber.flow import next_pair, progress
 from amber.store.db import (
     answer_pair,
