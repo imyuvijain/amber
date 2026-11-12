@@ -2,7 +2,7 @@ import { useCallback, useState, type ComponentType } from 'react'
 import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
 import Quiz from './screens/Quiz'
-import Scoreboard from './screens/Scoreboard'
+import Results from './screens/Results'
 import Sections from './screens/Sections'
 import Showdown from './screens/Showdown'
 import StyleWords from './screens/StyleWords'
@@ -18,7 +18,7 @@ const SCREENS: Record<string, ComponentType<ScreenProps>> = {
   quiz: Quiz,
   art: ThisOrThat,
   clothes: Showdown,
-  results: Scoreboard,
+  results: Results,
 }
 
 function initial(): { userId: string | null; step: string } {

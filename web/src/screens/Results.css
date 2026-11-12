@@ -1,0 +1,120 @@
+.results {
+  display: grid;
+  gap: 3rem;
+  max-width: 54rem;
+}
+
+.results h1 {
+  font-size: clamp(2.1rem, 1rem + 5vw, 3.8rem);
+  max-width: 18ch;
+}
+.results h2 {
+  font-size: clamp(1.5rem, 1rem + 1.6vw, 2.1rem);
+}
+
+.block {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.headline {
+  display: grid;
+  gap: 0.9rem;
+}
+.headline .mark {
+  color: var(--c);
+  font-variant-numeric: tabular-nums;
+}
+.ci {
+  color: var(--muted);
+}
+
+.compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.compare li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 0.92rem;
+}
+.compare .who {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+.compare strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.sentences {
+  display: grid;
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 40rem;
+}
+.sentences li {
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.cosines {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 34rem;
+  font-variant-numeric: tabular-nums;
+}
+.cosines th,
+.cosines td {
+  padding: 0.55rem 0.4rem;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+}
+.cosines thead th {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.cosines th .bead {
+  --size: 0.65rem;
+  margin-right: 0.3rem;
+  display: inline-block;
+}
+.cosines tbody th {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cosines td {
+  background: color-mix(in srgb, var(--ink) var(--t, 0%), transparent);
+}
+.cosines td.self {
+  background: none;
+  color: var(--muted);
+}
+
+@media (max-width: 40rem) {
+  .results {
+    gap: 2.25rem;
+  }
+  .cosines th,
+  .cosines td {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.85rem;
+  }
+}
