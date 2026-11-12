@@ -14,7 +14,7 @@
 
   --you-stated: #3366d9;
   --you-bigfive: #0f9d8a;
-  --you-art: #cc3d96;
+  --you-art: #7a4fd6;
   --you-revealed: #e8890c;
 
   --radius: 14px;
@@ -36,10 +36,10 @@
     --focus: #8fb0ff;
     --danger: #ff8a80;
 
-    --you-stated: #6c93f0;
-    --you-bigfive: #35c2ae;
-    --you-art: #ec6db9;
-    --you-revealed: #f5a030;
+    --you-stated: #4a86ec;
+    --you-bigfive: #1fa98d;
+    --you-art: #9085e9;
+    --you-revealed: #d17f12;
 
     --shadow: 0 1px 0 rgb(255 255 255 / 0.04), 0 14px 36px -16px rgb(0 0 0 / 0.7);
     color-scheme: dark;
