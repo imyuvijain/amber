@@ -167,6 +167,17 @@ export const choose = (pairId: string, chosenId: string) =>
 
 export const getResults = (uid: string) => request<Results>('GET', `/api/users/${uid}/results`)
 
+/** Clothes matching a query: the plain top results, and the same candidates reranked by one of
+ *  your Yous (empty when that You abstains). */
+export interface SearchResults {
+  you: string
+  generic: Item[]
+  personal: Item[]
+}
+
+export const search = (uid: string, q: string, you: string) =>
+  request<SearchResults>('GET', `/api/users/${uid}/search?${new URLSearchParams({ q, you })}`)
+
 /** The thumbnail URL of an item id such as "c:12" or "a:9" (the API's `/thumbs` route). */
 export const thumbUrl = (id: string): string => {
   const [prefix, n] = id.split(':')
