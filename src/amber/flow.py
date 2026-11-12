@@ -6,7 +6,8 @@
   must not see clothing choices are built and frozen, then pairs are drawn at random. Before
   a pair is returned every frozen You's prediction is saved, plus Revealed's, which comes
   from a model replayed on the person's *earlier* clothing picks only.
-* `retest` is wired up in a later task.
+* `retest` (clothes only, a week later): the person's showdown pairs come back, served by
+  `amber.eval.retest`. No predictions are saved and nothing trains on the answers.
 
 No item is ever shown twice to a user within a domain, whatever the phase.
 """
@@ -14,11 +15,13 @@ No item is ever shown twice to a user within a domain, whatever the phase.
 import hashlib
 import json
 import sqlite3
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
 from amber.config import DEFAULT_SECTIONS, SEED
+from amber.eval.retest import next_retest_pair
 from amber.prefs.active import choose_pair, random_pair
 from amber.store.db import (
     Choice,
@@ -133,16 +136,23 @@ def next_pair(
     phase: Phase,
     ctx: "AppContext",
     rng: np.random.Generator | None = None,
+    now: datetime | None = None,
 ) -> Choice | None:
     """The pair to show next, or `None` once the phase's pair count is reached.
 
     An unanswered pair is returned as it is, so closing the tab mid-pair resumes it. Raises
     `CatalogExhausted` when no unseen, non-near-duplicate pair remains, `ValueError` for a
-    showdown on art or a clothes train, `NotImplementedError` for retest.
+    showdown on art or a clothes train, `RetestNotDue` for a retest that cannot start yet.
+
+    `now` (default: the wall clock) only matters for the retest, which waits
+    `retest_min_days` after the last clothes pick; its pairs are fixed by the person's
+    showdown, so `rng` is ignored there.
     """
     total = _total(domain, phase, ctx)
     if phase == "retest":
-        raise NotImplementedError("retest pairs are wired up in a later task")
+        return next_retest_pair(
+            conn, user_id, ctx.settings, now if now is not None else datetime.now(UTC)
+        )
 
     frozen: dict[str, You] | None = None
     pending = open_pair(conn, user_id, domain, phase)

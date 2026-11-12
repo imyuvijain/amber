@@ -11,6 +11,7 @@ from fakes import (
 )
 
 from amber.eval.metrics import score_showdown
+from amber.eval.retest import RetestNotDue
 from amber.flow import (
     CatalogExhausted,
     allowed_ids,
@@ -247,8 +248,8 @@ def test_showdown_is_clothes_only(ctx, user):
     assert load_yous(ctx.conn, user) == {}
 
 
-def test_retest_is_not_wired_yet(ctx, user):
-    with pytest.raises(NotImplementedError):
+def test_retest_before_the_showdown_is_not_due(ctx, user):
+    with pytest.raises(RetestNotDue):
         next_pair(ctx.conn, user, "clothes", "retest", ctx)
 
 
