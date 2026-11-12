@@ -41,7 +41,9 @@ def test_you_cosines_leaves_out_abstaining_yous():
 def test_sample_ids_is_seeded_sorted_and_capped():
     ids = [f"c:{i}" for i in range(50)]
     a = sample_ids(ids, 10)
-    assert a == sample_ids(list(reversed(ids)), 10)  # same sample whatever the input order
+    assert a == sample_ids(
+        list(reversed(ids)), 10
+    )  # same sample whatever the input order
     assert len(a) == 10 and len(set(a)) == 10 and set(a) <= set(ids)
     assert sample_ids(ids[:4], 10) == sorted(ids[:4])
 
@@ -74,7 +76,10 @@ def test_map_points_shape(spaces):
     assert len(art_pts) == 12
     assert all(set(p) == {"id", "domain", "x", "y"} for p in out["points"])
     assert all(np.isfinite([p["x"], p["y"]]).all() for p in out["points"])
-    assert [m["you"] for m in out["yous"]] == ["stated", "revealed"]  # abstainer: no marker
+    assert [m["you"] for m in out["yous"]] == [
+        "stated",
+        "revealed",
+    ]  # abstainer: no marker
     assert all(len(m["top"]) == 5 and set(m["top"]) <= set(ids) for m in out["yous"])
 
 
@@ -89,7 +94,9 @@ def test_you_markers_sit_at_the_edge_of_the_dot_cloud(spaces):
         art_index=art,
         n_art=10,
     )
-    reach = max(np.hypot(p["x"], p["y"]) for p in out["points"] if p["domain"] == "clothes")
+    reach = max(
+        np.hypot(p["x"], p["y"]) for p in out["points"] if p["domain"] == "clothes"
+    )
     marker = out["yous"][0]
     assert np.hypot(marker["x"], marker["y"]) == pytest.approx(reach)
 
@@ -99,10 +106,14 @@ def test_marker_points_the_way_of_w_in_the_plane(spaces):
     ids = sample_ids(clothes.ids, 40)
     basis2d = fit_map_basis(clothes, ids)
     w = _unit(*range(1, 9))
-    out = map_points(clothes, basis2d, {"art": _you("art", w)}, ids, art_index=art, n_art=5)
+    out = map_points(
+        clothes, basis2d, {"art": _you("art", w)}, ids, art_index=art, n_art=5
+    )
     want = basis2d.project(w)
     got = np.array([out["yous"][0]["x"], out["yous"][0]["y"]])
-    assert got @ want / (np.linalg.norm(got) * np.linalg.norm(want)) == pytest.approx(1.0)
+    assert got @ want / (np.linalg.norm(got) * np.linalg.norm(want)) == pytest.approx(
+        1.0
+    )
 
 
 def test_art_is_centered_by_the_art_mean(spaces):
