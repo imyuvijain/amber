@@ -174,3 +174,47 @@
     gap: 0.4rem;
   }
 }
+
+/* The person's own ceiling: a solid line over the dashed coin-flip rule. */
+.ceiling {
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  width: 3px;
+  translate: -50% 0;
+  background: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--paper);
+}
+
+.normalized {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.norm-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.norm-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 0.92rem;
+}
+.norm-list .who {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+.norm-list strong {
+  font-variant-numeric: tabular-nums;
+}

@@ -59,6 +59,17 @@ export interface Results {
   cosines: Record<string, Record<string, number>>
   map: YouMapData
   readout: Readout
+  /** When the retest opens (ISO), or null before the clothes picks are all in. */
+  retest_due_at: string | null
+  /** The retest can be taken now (and is not finished). */
+  retest_due: boolean
+  /** How many pairs the retest re-shows. */
+  retest_pairs: number
+  /** How often you re-picked the same item on the retest, once it is finished. */
+  ceiling: number | null
+  /** Each You's accuracy rescaled so a coin flip is 0 and the ceiling is 1; null where the
+   *  ceiling is at or below a coin flip. Empty until the retest is finished. */
+  normalized: Record<string, number | null>
 }
 
 /** One dot on the map: a clothing or art item in the clothes 2-D plane. */
