@@ -9,7 +9,8 @@
 * `retest` (clothes only, a week later): the person's showdown pairs come back, served by
   `amber.eval.retest`. No predictions are saved and nothing trains on the answers.
 
-No item is ever shown twice to a user within a domain, whatever the phase.
+No item is ever shown twice to a user within a domain, whatever the phase, except the retest, which re-shows earlier
+pairs by design.
 """
 
 import hashlib
