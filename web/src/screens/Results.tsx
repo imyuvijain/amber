@@ -2,6 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { ApiError, getResults, type Results as ResultsData, type Score } from '../api'
 import '../components/Form.css'
 import LearningCurve from '../components/LearningCurve'
+import PairScreen from '../components/PairScreen'
+import RetestCard from '../components/RetestCard'
 import Scoreboard from '../components/Scoreboard'
 import YouMap from '../components/YouMap'
 import { YOUS, youById } from '../yous'
@@ -152,8 +154,10 @@ function Cosines({ cosines }: { cosines: ResultsData['cosines'] }) {
 export default function Results({ userId, reset }: ScreenProps) {
   const [results, setResults] = useState<ResultsData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retesting, setRetesting] = useState(false)
 
   useEffect(() => {
+    if (retesting) return
     let live = true
     getResults(userId)
       .then((r) => live && setResults(r))
@@ -161,8 +165,26 @@ export default function Results({ userId, reset }: ScreenProps) {
     return () => {
       live = false
     }
-  }, [userId])
+  }, [userId, retesting])
 
+  if (retesting) {
+    return (
+      <PairScreen
+        userId={userId}
+        domain="clothes"
+        phase="retest"
+        heading="Same pairs, a week later"
+        hint="Pick again, the way you would today. These picks change none of your scores; they measure how steady your taste is."
+        progressLabel="Retest picks"
+        dwellMs={300}
+        onDone={() => {
+          setResults(null) // reload with the ceiling, not the old banner
+          setRetesting(false)
+        }}
+        onReset={reset}
+      />
+    )
+  }
   if (error) {
     return (
       <div className="form-screen">
@@ -183,6 +205,7 @@ export default function Results({ userId, reset }: ScreenProps) {
   return (
     <div className="results">
       <Headline results={results} />
+      <RetestCard results={results} onStart={() => setRetesting(true)} />
       <section className="block" aria-labelledby="score-h">
         <h2 id="score-h">Scoreboard</h2>
         <Scoreboard results={results} />
