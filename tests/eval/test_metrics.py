@@ -1,6 +1,15 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
-from amber.eval.metrics import Score, learning_curve, score_showdown
+import pytest
+
+from amber.eval.metrics import (
+    Score,
+    learning_curve,
+    normalized_accuracy,
+    score_showdown,
+    self_consistency,
+)
 from amber.store.db import Choice
 from amber.yous.base import YOU_ORDER
 
@@ -138,3 +147,62 @@ def test_score_window_selects_positions():
     s = _by_you(score_showdown(choices, preds, window=(1, 3)))["stated"]
     assert s.n == 3 and s.accuracy == 0.0
     assert _by_you(score_showdown(choices, preds, window=None))["stated"].n == 6
+
+
+# --- the ceiling -------------------------------------------------------------------
+
+
+def _retest(i: int, original: Choice, same: bool = True, swap: bool = False) -> Choice:
+    """A retest of `original`: the same item chosen again (or the other), sides swapped or not."""
+    a, b = (original.b_id, original.a_id) if swap else (original.a_id, original.b_id)
+    first = original.chosen_id
+    other = original.b_id if first == original.a_id else original.a_id
+    return Choice(
+        pair_id=f"r{i}",
+        user_id="u",
+        domain="clothes",
+        phase="retest",
+        a_id=a,
+        b_id=b,
+        chosen_id=first if same else other,
+        shown_at=original.shown_at,
+        answered_at=original.answered_at,
+        retest_of=original.pair_id,
+    )
+
+
+def test_self_consistency_compares_items_not_sides():
+    orig = [_choice(0), _choice(1), _choice(2, chose_a=False), _choice(3)]
+    retest = [
+        _retest(0, orig[0], same=True, swap=True),  # same item, other side: consistent
+        _retest(1, orig[1], same=False),  # flipped
+        _retest(2, orig[2], same=True, swap=True),
+        _retest(3, orig[3], same=True),
+    ]
+    assert self_consistency(orig, retest) == 0.75
+
+
+def test_self_consistency_is_none_without_retest_answers():
+    orig = [_choice(0)]
+    assert self_consistency(orig, []) is None
+    unanswered = replace(_retest(0, orig[0]), chosen_id=None, answered_at=None)
+    assert self_consistency(orig, [unanswered]) is None
+
+
+def test_self_consistency_ignores_retests_of_unknown_originals():
+    orig = [_choice(0)]
+    stray = replace(_retest(0, orig[0]), retest_of="elsewhere")
+    assert self_consistency(orig, [stray]) is None
+    assert self_consistency(orig, [stray, _retest(1, orig[0])]) == 1.0
+
+
+def test_normalized_accuracy_is_distance_above_chance_over_the_ceiling():
+    assert normalized_accuracy(0.6, 0.8) == pytest.approx(1 / 3)
+    assert normalized_accuracy(0.8, 0.8) == pytest.approx(1.0)
+    assert normalized_accuracy(0.5, 0.9) == 0.0
+    assert normalized_accuracy(0.4, 0.9) == pytest.approx(-0.25)  # worse than chance
+
+
+def test_normalized_accuracy_is_none_when_the_ceiling_is_chance_or_less():
+    assert normalized_accuracy(0.7, 0.5) is None
+    assert normalized_accuracy(0.7, 0.4) is None
