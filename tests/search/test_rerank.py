@@ -42,7 +42,9 @@ def test_generic_is_the_best_query_matches_in_order(ctx, index, everything):
 def test_personal_is_reranked_from_the_candidates(ctx, index, everything):
     result = search(QUERY, _you(index, 1), ctx.encoder, index, everything, 20, 8)
     q = ctx.encoder.embed_texts([QUERY])[0]
-    candidates = {i for i, _ in index.top_k(q, 20, allowed=everything, use_centered=False)}
+    candidates = {
+        i for i, _ in index.top_k(q, 20, allowed=everything, use_centered=False)
+    }
     assert len(result.personal) == 8
     assert len(set(result.personal)) == 8
     assert set(result.personal) <= candidates
@@ -68,7 +70,9 @@ def test_opposite_yous_rank_the_candidates_in_opposite_ends(ctx, index, everythi
 
 
 def test_lambda_zero_keeps_the_query_order(ctx, index, everything):
-    result = search(QUERY, _you(index, 1), ctx.encoder, index, everything, 20, 8, lam=0.0)
+    result = search(
+        QUERY, _you(index, 1), ctx.encoder, index, everything, 20, 8, lam=0.0
+    )
     assert result.personal == result.generic
 
 
