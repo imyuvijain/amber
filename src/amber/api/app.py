@@ -22,7 +22,15 @@ from amber.config import REPO_ROOT
 from amber.context import DOMAINS, AppContext
 from amber.data.catalog import thumb_path
 from amber.eval.metrics import learning_curve, score_showdown
-from amber.flow import CatalogExhausted, next_pair, progress
+from amber.explain.geometry import (
+    MAP_CLOTHES,
+    fit_map_basis,
+    map_points,
+    sample_ids,
+    you_cosines,
+)
+from amber.explain.readout import Readout, build_readout
+from amber.flow import CatalogExhausted, allowed_ids, next_pair, progress
 from amber.store.db import (
     AlreadyAnswered,
     Choice,
@@ -36,6 +44,7 @@ from amber.store.db import (
     user_exists,
 )
 from amber.yous.bigfive import load_ipip, score_ipip
+from amber.yous.registry import build_all_yous
 from amber.yous.stated import load_style_words, load_style_words_rows
 
 MAX_STYLE_WORDS = 5
@@ -224,6 +233,25 @@ def create_app(ctx: AppContext) -> FastAPI:
                 "reveal": reveal_for(pair),
             }
 
+    def explain(uid: str, choices: list[Choice]) -> dict:
+        """The Yous as they stand after every pick: cosines, the map and the readout."""
+        yous = build_all_yous(ctx.conn, uid, ctx)
+        clothes = ctx.index["clothes"]
+        dots = sample_ids(sorted(allowed_ids(ctx.conn, uid, ctx)), MAP_CLOTHES)
+        return {
+            "cosines": you_cosines(yous),
+            "map": map_points(
+                clothes,
+                fit_map_basis(clothes, dots),
+                yous,
+                dots,
+                art_index=ctx.index["art"],
+            ),
+            "readout": asdict(
+                build_readout(yous, choices, ctx.items["clothes"], ctx.encoder)
+            ),
+        }
+
     @app.get("/api/users/{uid}/results")
     def get_results(uid: str) -> dict:
         with lock:
@@ -232,6 +260,16 @@ def create_app(ctx: AppContext) -> FastAPI:
             predictions = {
                 c.pair_id: get_predictions(ctx.conn, c.pair_id) for c in choices
             }
+            if not choices:
+                return {
+                    "scores_all": [],
+                    "scores_late": [],
+                    "curves": {},
+                    "n_clothes": 0,
+                    "cosines": {},
+                    "map": {"points": [], "yous": []},
+                    "readout": asdict(Readout([], [], [], [], [])),
+                }
             total = ctx.settings.clothes_pairs
             late = (total // 2 + 1, total)  # e.g. picks 21-40 of 40
             all_scores = score_showdown(choices, predictions)
@@ -245,6 +283,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                     for s in all_scores
                 },
                 "n_clothes": len(choices),
+                **explain(uid, choices),
             }
 
     @app.get("/thumbs/{domain}/{name}")

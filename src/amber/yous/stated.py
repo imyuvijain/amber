@@ -46,7 +46,9 @@ def build_stated(conn: sqlite3.Connection, user_id: str, ctx: "AppContext") -> Y
     if not words:
         return You("stated", None, dict(_NO_WORDS))
     try:
-        w = text_direction(ctx.encoder, [f"a photo of {word} clothing" for word in words])
+        w = text_direction(
+            ctx.encoder, [f"a photo of {word} clothing" for word in words]
+        )
     except ValueError:
         return You("stated", None, {"reason": "no direction", "words": words})
     return You("stated", w, {"words": words})

@@ -330,7 +330,9 @@ def test_style_rejects_zero_six_and_unknown_words(client, ctx):
         assert r.status_code == 422
     assert get_answers(ctx.conn, uid, "stated") == {}
     five = load_style_words()[:5]
-    assert client.put(f"/api/users/{uid}/style", json={"words": five}).status_code == 200
+    assert (
+        client.put(f"/api/users/{uid}/style", json={"words": five}).status_code == 200
+    )
 
 
 def test_get_style_words_returns_five_rows_of_six(client):
@@ -343,8 +345,9 @@ def test_get_style_words_returns_five_rows_of_six(client):
 
 def test_describe_route_is_gone(client):
     uid = _new_user(client)
-    assert (
-        client.put(f"/api/users/{uid}/describe", json={"text": "x"}).status_code in (404, 405)
+    assert client.put(f"/api/users/{uid}/describe", json={"text": "x"}).status_code in (
+        404,
+        405,
     )
 
 
@@ -450,7 +453,9 @@ def test_results_route_shape(client, ctx):
     assert set(res["curves"]) == {s["you"] for s in res["scores_all"]}
     assert all(len(c) == n for c in res["curves"].values())
     live = res["cosines"]
-    assert "revealed" in live and "stated" not in live  # no style words picked: abstains
+    assert (
+        "revealed" in live and "stated" not in live
+    )  # no style words picked: abstains
     assert live["art"]["revealed"] == live["revealed"]["art"]
     points = res["map"]["points"]
     assert {p["domain"] for p in points} == {"clothes", "art"}
