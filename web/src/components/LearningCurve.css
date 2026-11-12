@@ -1,0 +1,142 @@
+.curve {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  max-width: 54rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+.legend li,
+.tip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.key {
+  width: 1.1rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--c);
+  flex: none;
+}
+
+.curve-box {
+  position: relative;
+}
+.curve-box svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+  overflow: visible;
+}
+
+.curve .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.curve .coin {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  opacity: 0.8;
+}
+.curve .tick {
+  font-size: 15px;
+  fill: var(--muted);
+  font-family: inherit;
+}
+.curve .line {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.curve .end {
+  font-size: 17px;
+  font-weight: 600;
+  fill: var(--ink);
+  font-family: inherit;
+}
+.curve .cross {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+.curve .dot {
+  fill: var(--c);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.tip {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  pointer-events: none;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.45rem 0.65rem;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.tip-head {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.tip-row strong {
+  min-width: 2.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tip-row span:last-child {
+  color: var(--muted);
+}
+.tip .key {
+  width: 0.8rem;
+}
+
+.curve figcaption,
+.as-table summary {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.as-table summary {
+  cursor: pointer;
+  width: max-content;
+}
+.as-table table {
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.as-table th,
+.as-table td {
+  text-align: right;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+}
+.as-table th:first-child {
+  text-align: left;
+}
+.as-table th[scope='row'] {
+  font-weight: 600;
+}
+.as-table thead th {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
