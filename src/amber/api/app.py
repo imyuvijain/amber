@@ -6,9 +6,11 @@ One sqlite connection is shared by every request, so every handler that touches 
 
 import json
 import math
+import os
 import re
 import threading
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Literal
 
 import pandas as pd
@@ -21,7 +23,18 @@ from pydantic import BaseModel
 from amber.config import REPO_ROOT
 from amber.context import DOMAINS, AppContext
 from amber.data.catalog import thumb_path
-from amber.eval.metrics import learning_curve, score_showdown
+from amber.eval.metrics import (
+    learning_curve,
+    normalized_accuracy,
+    score_showdown,
+    self_consistency,
+)
+from amber.eval.retest import (
+    RetestNotDue,
+    retest_due,
+    retest_due_at,
+    retest_finished,
+)
 from amber.explain.geometry import (
     MAP_CLOTHES,
     fit_map_basis,
@@ -52,6 +65,16 @@ WEB_DIST = REPO_ROOT / "web" / "dist"
 DEV_ORIGIN = "http://localhost:5173"
 _THUMB_NAME = re.compile(r"[0-9]+\.jpg")
 _NOT_LABELS = ("id", "title")
+
+
+def now() -> datetime:
+    """The clock the retest runs on: the wall clock, unless the dev-only `AMBER_NOW`
+    (an ISO timestamp, read on every call) moves it, e.g. to try the retest without waiting."""
+    shifted = os.environ.get("AMBER_NOW")
+    if not shifted:
+        return datetime.now(UTC)
+    moved = datetime.fromisoformat(shifted)
+    return moved.replace(tzinfo=UTC) if moved.tzinfo is None else moved
 
 
 class UserIn(BaseModel):
@@ -188,13 +211,13 @@ def create_app(ctx: AppContext) -> FastAPI:
                 if art["done"] < art["total"]:
                     raise HTTPException(409, "finish the art picks first")
             try:
-                pair = next_pair(ctx.conn, uid, body.domain, body.phase, ctx)
+                pair = next_pair(ctx.conn, uid, body.domain, body.phase, ctx, now=now())
             except CatalogExhausted as exc:
                 raise HTTPException(409, f"catalog exhausted: {exc}") from exc
+            except RetestNotDue as exc:
+                raise HTTPException(409, str(exc)) from exc
             except ValueError as exc:  # e.g. a showdown on art
                 raise HTTPException(422, str(exc)) from exc
-            except NotImplementedError as exc:
-                raise HTTPException(501, str(exc)) from exc
             prog = progress(ctx.conn, uid, body.domain, body.phase, ctx)
             if pair is None:
                 return {"done": True, "progress": prog}
@@ -252,6 +275,30 @@ def create_app(ctx: AppContext) -> FastAPI:
             ),
         }
 
+    def retest_fields(uid: str, scores: list) -> dict:
+        """When the retest opens, whether it is open, and (once it is finished) the ceiling.
+
+        The ceiling is the person's self-consistency over the whole retest; it is withheld
+        until every retest pick is in. `normalized` maps each You to its accuracy over all
+        showdown picks, rescaled by the ceiling (`None` where the ceiling is at or below chance).
+        """
+        settings, clock = ctx.settings, now()
+        due_at = retest_due_at(ctx.conn, uid, settings)
+        retest = list_choices(ctx.conn, uid, "clothes", "retest")
+        ceiling = (
+            self_consistency(list_choices(ctx.conn, uid, "clothes", "showdown"), retest)
+            if retest_finished(ctx.conn, uid, settings)
+            else None
+        )
+        return {
+            "retest_due_at": None if due_at is None else due_at.isoformat(),
+            "retest_due": retest_due(ctx.conn, uid, settings, clock),
+            "ceiling": ceiling,
+            "normalized": {}
+            if ceiling is None
+            else {s.you: normalized_accuracy(s.accuracy, ceiling) for s in scores},
+        }
+
     @app.get("/api/users/{uid}/results")
     def get_results(uid: str) -> dict:
         with lock:
@@ -269,6 +316,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                     "cosines": {},
                     "map": {"points": [], "yous": []},
                     "readout": asdict(Readout([], [], [], [], [])),
+                    **retest_fields(uid, []),
                 }
             total = ctx.settings.clothes_pairs
             late = (total // 2 + 1, total)  # e.g. picks 21-40 of 40
@@ -284,6 +332,7 @@ def create_app(ctx: AppContext) -> FastAPI:
                 },
                 "n_clothes": len(choices),
                 **explain(uid, choices),
+                **retest_fields(uid, all_scores),
             }
 
     @app.get("/thumbs/{domain}/{name}")

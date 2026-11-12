@@ -368,6 +368,10 @@ def test_results_before_any_clothes_pick(client):
             "surprises": [],
             "sentences": [],
         },
+        "retest_due_at": None,
+        "retest_due": False,
+        "ceiling": None,
+        "normalized": {},
     }
 
 
@@ -444,6 +448,10 @@ def test_results_route_shape(client, ctx):
         "cosines",
         "map",
         "readout",
+        "retest_due_at",
+        "retest_due",
+        "ceiling",
+        "normalized",
     }
     assert res["n_clothes"] == n
     assert {s["you"] for s in res["scores_all"]} >= {"stated", "art", "revealed"}
