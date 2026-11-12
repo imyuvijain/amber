@@ -1,6 +1,7 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -277,9 +278,9 @@ def test_bad_domain_phase_or_combination_is_422(client):
     assert client.post(f"/api/users/{uid}/next", json={}).status_code == 422
 
 
-def test_retest_is_not_available_yet(client):
+def test_retest_before_the_showdown_is_409(client):
     uid = _new_user(client)
-    assert _next(client, uid, phase="retest").status_code == 501
+    assert _next(client, uid, phase="retest").status_code == 409
 
 
 def test_catalog_exhausted_is_409(client, ctx):
@@ -526,3 +527,113 @@ def test_full_flow_with_quiz_scores_bigfive(client, ctx):
     assert choices
     for c in choices:
         assert "bigfive" in get_predictions(ctx.conn, c.pair_id)
+
+
+# --- the retest and the ceiling --------------------------------------------------
+
+
+def _plus_days(ctx, uid, days: float) -> str:
+    """An ISO timestamp `days` after the user's last clothes pick."""
+    last = ctx.conn.execute(
+        "SELECT MAX(answered_at) FROM pairs WHERE user_id = ? AND phase = 'showdown'",
+        (uid,),
+    ).fetchone()[0]
+    return (datetime.fromisoformat(last) + timedelta(days=days)).isoformat()
+
+
+def _play_retest(client, ctx, uid, same: bool) -> int:
+    """Answer every retest pair, re-picking the original item (`same`) or the other one."""
+    n = 0
+    while not (r := _next(client, uid, phase="retest").json()).get("done"):
+        (orig,) = ctx.conn.execute(
+            "SELECT o.chosen_id FROM pairs p JOIN pairs o ON o.pair_id = p.retest_of "
+            "WHERE p.pair_id = ?",
+            (r["pair_id"],),
+        ).fetchone()
+        ids = [r["a"]["id"], r["b"]["id"]]
+        pick = orig if same else next(i for i in ids if i != orig)
+        resp = client.post(
+            f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": pick}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["reveal"] is None
+        n += 1
+    return n
+
+
+def test_results_before_the_retest_say_when_it_opens(client, ctx):
+    uid = _ready(client, **MEN_APPAREL)
+    _play(client, uid, "showdown")
+    res = client.get(f"/api/users/{uid}/results").json()
+    assert res["retest_due_at"] == _plus_days(ctx, uid, 7)
+    assert res["retest_due"] is False
+    assert res["ceiling"] is None and res["normalized"] == {}
+
+
+def test_results_without_picks_have_no_retest_fields_to_show(client):
+    res = client.get(f"/api/users/{_new_user(client)}/results").json()
+    assert res["retest_due_at"] is None and res["retest_due"] is False
+    assert res["ceiling"] is None and res["normalized"] == {}
+
+
+def test_next_retest_is_409_until_due(client, ctx, monkeypatch):
+    uid = _ready(client, **MEN_APPAREL)
+    _play(client, uid, "showdown")
+    r = _next(client, uid, phase="retest")
+    assert r.status_code == 409 and "opens on" in r.json()["detail"]
+    monkeypatch.setenv("AMBER_NOW", _plus_days(ctx, uid, 6.9))
+    assert _next(client, uid, phase="retest").status_code == 409
+    monkeypatch.setenv("AMBER_NOW", _plus_days(ctx, uid, 7))
+    assert _next(client, uid, phase="retest").status_code == 200
+
+
+def test_retest_on_art_is_422(client, ctx, monkeypatch):
+    uid = _ready(client, **MEN_APPAREL)
+    monkeypatch.setenv("AMBER_NOW", "2999-01-01T00:00:00+00:00")
+    assert _next(client, uid, "art", "retest").status_code == 422
+
+
+def test_retest_flow_gives_the_ceiling_and_normalized_scores(client, ctx, monkeypatch):
+    uid = _ready(client, **MEN_APPAREL)
+    _play(client, uid, "showdown")
+    before = client.get(f"/api/users/{uid}/results").json()
+    monkeypatch.setenv("AMBER_NOW", _plus_days(ctx, uid, 8))
+    mid = client.get(f"/api/users/{uid}/results").json()
+    assert mid["retest_due"] is True and mid["ceiling"] is None
+    first = _next(client, uid, phase="retest").json()
+    assert set(first) == {"pair_id", "a", "b", "progress"}
+    assert first["progress"] == {"done": 0, "total": 2}
+    assert _play_retest(client, ctx, uid, same=True) == 2
+
+    after = client.get(f"/api/users/{uid}/results").json()
+    assert after["ceiling"] == 1.0
+    assert after["retest_due"] is False
+    assert set(after["normalized"]) == {s["you"] for s in after["scores_all"]}
+    for s in after["scores_all"]:
+        assert after["normalized"][s["you"]] == pytest.approx(
+            (s["accuracy"] - 0.5) / 0.5
+        )
+    for key in ("scores_all", "scores_late", "curves", "n_clothes", "readout", "map"):
+        assert after[key] == before[key]  # retest picks never reach the scores
+
+
+def test_a_ceiling_at_or_below_chance_has_no_normalized_scores(
+    client, ctx, monkeypatch
+):
+    uid = _ready(client, **MEN_APPAREL)
+    _play(client, uid, "showdown")
+    monkeypatch.setenv("AMBER_NOW", _plus_days(ctx, uid, 8))
+    _play_retest(client, ctx, uid, same=False)
+    res = client.get(f"/api/users/{uid}/results").json()
+    assert res["ceiling"] == 0.0
+    assert res["normalized"] == {s["you"]: None for s in res["scores_all"]}
+
+
+def test_ceiling_waits_for_the_whole_retest(client, ctx, monkeypatch):
+    uid = _ready(client, **MEN_APPAREL)
+    _play(client, uid, "showdown")
+    monkeypatch.setenv("AMBER_NOW", _plus_days(ctx, uid, 8))
+    r = _next(client, uid, phase="retest").json()
+    client.post(f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r["a"]["id"]})
+    res = client.get(f"/api/users/{uid}/results").json()
+    assert res["ceiling"] is None and res["retest_due"] is True
