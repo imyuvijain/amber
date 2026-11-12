@@ -17,7 +17,9 @@ export default function RetestCard({ results, onStart }: Props) {
   if (results.retest_due) {
     return (
       <aside className="retest" aria-labelledby="retest-h">
-        <h2 id="retest-h">Your {n}-pick retest is ready</h2>
+        <h2 id="retest-h">
+          Your <span className="nowrap">{n}-pick</span> retest is ready
+        </h2>
         <p className="lede">
           The same pairs again, some flipped left to right. How often you pick the same one is the
           most any You could be expected to get right.
@@ -34,7 +36,7 @@ export default function RetestCard({ results, onStart }: Props) {
   return (
     <aside className="retest" aria-labelledby="retest-h">
       <h2 id="retest-h">
-        Come back on {day(opens)} for a {n}-pick retest
+        Come back on {day(opens)} for a <span className="nowrap">{n}-pick</span> retest
       </h2>
       <p className="lede">
         We will show you {n} of these pairs again. Opens at {clock(opens)}. Nobody can predict your

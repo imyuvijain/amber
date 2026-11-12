@@ -10,3 +10,7 @@
 .retest h2 {
   font-size: clamp(1.25rem, 1rem + 1vw, 1.6rem);
 }
+
+.retest .nowrap {
+  white-space: nowrap;
+}
