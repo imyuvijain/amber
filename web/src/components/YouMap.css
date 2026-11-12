@@ -1,0 +1,122 @@
+.map {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  max-width: 54rem;
+}
+
+.map-legend svg {
+  display: block;
+}
+.map-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.map-box {
+  position: relative;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.map-box svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+
+.dot-clothes,
+.dot-art {
+  fill: var(--muted);
+  opacity: 0.5;
+}
+.map .ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.you-marker {
+  cursor: pointer;
+  outline: none;
+}
+.you-marker .hit {
+  fill: transparent;
+}
+.you-marker .stem {
+  stroke: var(--c);
+  stroke-width: 1.5;
+  opacity: 0.35;
+}
+.you-marker .marker {
+  fill: var(--c);
+  stroke: var(--panel);
+  stroke-width: 3;
+}
+.you-marker:hover .marker,
+.you-marker:focus-visible .marker,
+.you-marker[data-on='true'] .marker {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.you-marker:hover .stem,
+.you-marker[data-on='true'] .stem {
+  opacity: 0.8;
+}
+.marker-label {
+  font-size: 19px;
+  font-weight: 650;
+  fill: var(--ink);
+  font-family: inherit;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.thumb-tip {
+  position: absolute;
+  width: 4.5rem;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  translate: -50% calc(-100% - 12px);
+  pointer-events: none;
+}
+
+.map figcaption {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.top-strip {
+  display: grid;
+  gap: 0.5rem;
+}
+.top-strip p {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.top-strip ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.top-strip img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--c);
+}
