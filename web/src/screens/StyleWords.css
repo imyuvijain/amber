@@ -1,4 +1,4 @@
-/* Six chips per row on one line at desktop widths; below 600px the rows dissolve into
+/* Six chips per row on one line at desktop widths; up to 760px (six nowrap chips overflow their column below ~610px) the rows dissolve into
    one wrapping container so no chip sits alone on a line. */
 .style-screen {
   max-width: 54rem;
@@ -21,7 +21,7 @@
   text-align: center;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 760px) {
   .style-rows {
     display: flex;
     flex-wrap: wrap;
