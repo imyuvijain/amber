@@ -9,6 +9,7 @@ import YouMap from '../components/YouMap'
 import { YOUS, youById } from '../yous'
 import './Results.css'
 import type { ScreenProps } from './props'
+import Search from './Search'
 
 /** The headline You: the art you, or (when art abstained) the best non-revealed You with a say. */
 function headliner(results: ResultsData): Score | undefined {
@@ -155,6 +156,7 @@ export default function Results({ userId, reset }: ScreenProps) {
   const [results, setResults] = useState<ResultsData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retesting, setRetesting] = useState(false)
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     if (retesting) return
@@ -185,6 +187,7 @@ export default function Results({ userId, reset }: ScreenProps) {
       />
     )
   }
+  if (searching) return <Search userId={userId} onBack={() => setSearching(false)} />
   if (error) {
     return (
       <div className="form-screen">
@@ -220,6 +223,18 @@ export default function Results({ userId, reset }: ScreenProps) {
         <YouMap data={results.map} />
       </section>
       <Cosines cosines={results.cosines} />
+      <section className="block" aria-labelledby="search-h">
+        <h2 id="search-h">Search by your taste</h2>
+        <p className="lede">
+          Look for a black jacket or running shoes and see the results next to the same search
+          ranked by one of your Yous.
+        </p>
+        <div className="form-actions">
+          <button className="btn" type="button" onClick={() => setSearching(true)}>
+            Search the clothes
+          </button>
+        </div>
+      </section>
       <div className="form-actions">
         <button className="btn btn-quiet" type="button" onClick={reset}>
           Play again
