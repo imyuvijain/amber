@@ -55,6 +55,39 @@ export interface Results {
   /** Rolling accuracy per pick, by You. */
   curves: Record<string, number[]>
   n_clothes: number
+  /** Cosine between each pair of Yous that have a direction (abstainers are absent). */
+  cosines: Record<string, Record<string, number>>
+  map: YouMapData
+  readout: Readout
+}
+
+/** One dot on the map: a clothing or art item in the clothes 2-D plane. */
+export interface MapPoint {
+  id: string
+  domain: Domain
+  x: number
+  y: number
+}
+
+/** A You's marker, at the edge of the dot cloud, plus the clothing items it likes most. */
+export interface MapYou {
+  you: string
+  x: number
+  y: number
+  top: string[]
+}
+
+export interface YouMapData {
+  points: MapPoint[]
+  yous: MapYou[]
+}
+
+export interface Readout {
+  said: string[]
+  picks: string[]
+  art_says: string[]
+  surprises: string[]
+  sentences: string[]
 }
 
 /** An HTTP error carrying the server's `detail` and status. */
@@ -122,6 +155,12 @@ export const choose = (pairId: string, chosenId: string) =>
   request<Chosen>('POST', `/api/pairs/${pairId}/choose`, { chosen_id: chosenId })
 
 export const getResults = (uid: string) => request<Results>('GET', `/api/users/${uid}/results`)
+
+/** The thumbnail URL of an item id such as "c:12" or "a:9" (the API's `/thumbs` route). */
+export const thumbUrl = (id: string): string => {
+  const [prefix, n] = id.split(':')
+  return `/thumbs/${prefix === 'a' ? 'art' : 'clothes'}/${n}.jpg`
+}
 
 /** Warm the browser cache so the next pair appears instantly. */
 export function prefetchImages(...items: Item[]): void {
