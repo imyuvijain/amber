@@ -1,11 +1,13 @@
 import { useState, type CSSProperties, type PointerEvent } from 'react'
+import { useWidth } from '../hooks/useWidth'
 import { YOUS, youById } from '../yous'
 import './LearningCurve.css'
 
-const W = 640
-const H = 300
-const M = { top: 14, right: 96, bottom: 34, left: 46 }
-const LABEL_GAP = 21
+// The SVG's viewBox is its real pixel width, so its text renders at the font sizes in
+// LearningCurve.css (never scaled down on a phone).
+const MIN_W = 280
+const M = { top: 14, right: 78, bottom: 30, left: 40 }
+const LABEL_GAP = 17
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
 
@@ -20,7 +22,10 @@ export default function LearningCurve({ curves, abstained }: Props) {
   const ids = YOUS.map((y) => y.id).filter((id) => curves[id]?.length)
   const n = Math.max(0, ...ids.map((id) => curves[id].length))
   const [hover, setHover] = useState<number | null>(null)
+  const [box, width] = useWidth<HTMLDivElement>()
   if (n === 0) return null
+  const W = Math.max(MIN_W, width)
+  const H = W < 480 ? 250 : 300
 
   const values = ids.flatMap((id) => curves[id])
   let lo = Math.min(Math.floor(Math.min(...values) * 10) / 10, 0.4)
@@ -62,7 +67,7 @@ export default function LearningCurve({ curves, abstained }: Props) {
           </li>
         ))}
       </ul>
-      <div className="curve-box">
+      <div className="curve-box" ref={box}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           role="img"
@@ -144,6 +149,7 @@ export default function LearningCurve({ curves, abstained }: Props) {
       </figcaption>
       <details className="as-table">
         <summary>Show as a table</summary>
+        <div className="scroll">
         <table>
           <thead>
             <tr>
@@ -169,6 +175,7 @@ export default function LearningCurve({ curves, abstained }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       </details>
     </figure>
   )

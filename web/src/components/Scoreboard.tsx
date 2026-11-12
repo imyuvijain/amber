@@ -53,7 +53,8 @@ function Row({ score, late, abstained }: { score: Score; late?: Score; abstained
 /** One row per You: accuracy bar, 95% whisker, dashed coin-flip line. */
 export default function Scoreboard({ results }: { results: Results }) {
   const lateN = results.scores_late[0]?.n ?? 0
-  const lateLabel = lateN > 0 ? `picks ${results.n_clothes - lateN + 1}–${results.n_clothes}` : 'late picks'
+  const lateRange = lateN > 0 ? `${results.n_clothes - lateN + 1}–${results.n_clothes}` : 'late'
+  const lateLabel = lateN > 0 ? `picks ${lateRange}` : 'late picks'
   return (
     <div className="scoreboard">
       <p className="lede">
@@ -67,7 +68,7 @@ export default function Scoreboard({ results }: { results: Results }) {
           <span className="coin">coin flip</span>
           <span className="head-num">
             <span>all {results.n_clothes}</span>
-            <span>{lateLabel}</span>
+            <span>{lateRange}</span>
           </span>
         </div>
         <ul className="rows">

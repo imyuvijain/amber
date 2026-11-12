@@ -66,13 +66,13 @@
   opacity: 0.8;
 }
 .marker-label {
-  font-size: 19px;
+  font-size: 13px;
   font-weight: 650;
   fill: var(--ink);
   font-family: inherit;
   paint-order: stroke;
   stroke: var(--panel);
-  stroke-width: 5px;
+  stroke-width: 4px;
   stroke-linejoin: round;
 }
 
@@ -83,9 +83,13 @@
   object-fit: contain;
   background: #fff;
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px -4px rgb(20 27 43 / 0.45);
   translate: -50% calc(-100% - 12px);
   pointer-events: none;
+}
+.thumb-tip[data-below='true'] {
+  translate: -50% 12px;
 }
 
 .map figcaption {

@@ -68,6 +68,7 @@
 }
 
 .row-name {
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -143,6 +144,7 @@
 }
 
 .head-num {
+  white-space: nowrap;
   grid-column: 3;
   grid-row: 1;
   display: grid;
@@ -159,8 +161,13 @@
 
 @media (max-width: 40rem) {
   .chart {
-    --name-w: 6.2rem;
-    --num-w: 3.6rem;
+    --name-w: 7.4rem;
+    --num-w: 3.2rem;
+  }
+  .chart-head,
+  .row,
+  .axis {
+    column-gap: 0.5rem;
   }
   .row-name {
     font-size: 0.9rem;

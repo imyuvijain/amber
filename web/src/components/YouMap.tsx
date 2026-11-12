@@ -1,13 +1,15 @@
 import { useMemo, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useWidth } from '../hooks/useWidth'
 import { thumbUrl, type MapPoint, type YouMapData } from '../api'
 import { youById } from '../yous'
 import './YouMap.css'
 
-const W = 640
-const H = 460
-const PAD = 52
-const HIT = 18 // pointer reach, in svg units, of the nearest-dot hover
-const CHIP_W = 150
+// The viewBox is the box's real pixel width, so labels and dots keep their pixel sizes on a phone.
+const MIN_W = 280
+const PHONE = 480
+const PAD = 40
+const HIT = 24 // pointer reach in px of the nearest-dot hover (a thumb is wider than a cursor)
+const CHIP_W = 104
 
 interface Props {
   data: YouMapData
@@ -18,6 +20,10 @@ interface Props {
 export default function YouMap({ data }: Props) {
   const [near, setNear] = useState<MapPoint | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
+  const [box, width] = useWidth<HTMLDivElement>()
+  const W = Math.max(MIN_W, width)
+  const H = W < PHONE ? Math.round(W * 1.05) : 460
+  const dotR = W < PHONE ? 4 : 3.5
 
   const view = useMemo(() => {
     const all = [...data.points, ...data.yous, { x: 0, y: 0 }]
@@ -37,15 +43,15 @@ export default function YouMap({ data }: Props) {
       const mx = sx(m.x)
       const my = sy(m.y)
       const lx = Math.min(W - CHIP_W / 2, Math.max(CHIP_W / 2, mx))
-      let ly = my < 56 ? my + 32 : my - 22
-      if (placed.some((q) => Math.abs(q.x - lx) < CHIP_W && Math.abs(q.y - ly) < 26)) {
-        ly = ly < my ? my + 32 : my - 22
+      let ly = my < 40 ? my + 28 : my - 20
+      if (placed.some((q) => Math.abs(q.x - lx) < CHIP_W && Math.abs(q.y - ly) < 20)) {
+        ly = ly < my ? my + 28 : my - 20
       }
       placed.push({ x: lx, y: ly })
       return { m, mx, my, lx, ly }
     })
     return { dots, markers, ox: sx(0), oy: sy(0) }
-  }, [data])
+  }, [data, W, H])
 
   if (!data.points.length) return null
 
@@ -87,7 +93,7 @@ export default function YouMap({ data }: Props) {
           <span className="bead" style={{ '--c': 'var(--ink)', '--size': '0.8rem' } as CSSProperties} />a You
         </li>
       </ul>
-      <div className="map-box">
+      <div className="map-box" ref={box}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           role="group"
@@ -98,12 +104,12 @@ export default function YouMap({ data }: Props) {
         >
           {view.dots.map(({ p, sx, sy }) =>
             p.domain === 'art' ? (
-              <rect key={p.id} className="dot-art" x={sx - 3.5} y={sy - 3.5} width={7} height={7} rx={1.5} />
+              <rect key={p.id} className="dot-art" x={sx - dotR} y={sy - dotR} width={dotR * 2} height={dotR * 2} rx={1.5} />
             ) : (
-              <circle key={p.id} className="dot-clothes" cx={sx} cy={sy} r={3.5} />
+              <circle key={p.id} className="dot-clothes" cx={sx} cy={sy} r={dotR} />
             ),
           )}
-          {hovered && <circle className="ring" cx={hovered.sx} cy={hovered.sy} r={7} />}
+          {hovered && <circle className="ring" cx={hovered.sx} cy={hovered.sy} r={dotR + 3.5} />}
           {view.markers.map(({ m, mx, my, lx, ly }) => {
             const you = youById(m.you)
             const on = picked === m.you
@@ -127,7 +133,7 @@ export default function YouMap({ data }: Props) {
               >
                 <line className="stem" x1={view.ox} y1={view.oy} x2={mx} y2={my} />
                 <circle className="hit" cx={mx} cy={my} r={22} />
-                <circle className="marker" cx={mx} cy={my} r={11} />
+                <circle className="marker" cx={mx} cy={my} r={10} />
                 <text className="marker-label" x={lx} y={ly} textAnchor="middle">
                   {you.name}
                 </text>
@@ -140,6 +146,7 @@ export default function YouMap({ data }: Props) {
             className="thumb-tip"
             src={thumbUrl(hovered.p.id)}
             alt=""
+            data-below={hovered.sy < 130}
             style={{
               left: `${Math.min(86, Math.max(14, (hovered.sx / W) * 100))}%`,
               top: `${(hovered.sy / H) * 100}%`,
@@ -151,8 +158,8 @@ export default function YouMap({ data }: Props) {
         A flat picture of the clothes space, fitted to the clothes you could see. Each marker sits at
         the edge and points the way its You leans; only the direction counts. The dots are{' '}
         {data.points.filter((p) => p.domain === 'clothes').length} of those clothes and{' '}
-        {data.points.filter((p) => p.domain === 'art').length} paintings. Hover a dot for its
-        picture.
+        {data.points.filter((p) => p.domain === 'art').length} paintings. Hover or tap a
+        dot for its picture.
         {chosen ? '' : ' Tap a You to see the items it likes most.'}
       </figcaption>
       {chosen && (

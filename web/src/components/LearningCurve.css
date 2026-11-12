@@ -50,7 +50,7 @@
   opacity: 0.8;
 }
 .curve .tick {
-  font-size: 15px;
+  font-size: 12px;
   fill: var(--muted);
   font-family: inherit;
 }
@@ -62,7 +62,7 @@
   stroke-linecap: round;
 }
 .curve .end {
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 600;
   fill: var(--ink);
   font-family: inherit;
@@ -115,6 +115,9 @@
 .as-table summary {
   cursor: pointer;
   width: max-content;
+}
+.as-table .scroll {
+  overflow-x: auto;
 }
 .as-table table {
   border-collapse: collapse;
