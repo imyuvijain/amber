@@ -122,6 +122,6 @@ glamorous
 cozy
 retro
 modern
-ethnic
+traditional
 athleisure
 smart casual
