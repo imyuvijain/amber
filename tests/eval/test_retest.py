@@ -9,6 +9,7 @@ from amber.eval.retest import (
     next_retest_pair,
     retest_due,
     retest_due_at,
+    retest_finished,
     retest_plan,
 )
 from amber.flow import next_pair, progress
@@ -186,3 +187,13 @@ def test_flow_raises_when_not_due(ctx, user, settings, played):
 def test_flow_default_now_is_the_wall_clock(ctx, user, settings, played):
     with pytest.raises(RetestNotDue):  # the fixture picks were made a moment ago
         next_pair(ctx.conn, user, "clothes", "retest", ctx)
+
+
+def test_retest_finished_only_after_all_pairs_are_answered(ctx, user, settings, played):
+    assert not retest_finished(ctx.conn, user, settings)
+    now = _after(played, 8)
+    pair = next_retest_pair(ctx.conn, user, settings, now)
+    answer_pair(ctx.conn, pair.pair_id, pair.a_id)
+    assert not retest_finished(ctx.conn, user, settings)
+    _play_retest(ctx, user, now)
+    assert retest_finished(ctx.conn, user, settings)

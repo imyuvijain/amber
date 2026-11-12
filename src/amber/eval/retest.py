@@ -75,6 +75,12 @@ def _unfinished(
     return len(done) < _retest_size(originals, settings)
 
 
+def retest_finished(conn: sqlite3.Connection, user_id: str, settings: Settings) -> bool:
+    """True once every retest pair is answered (never before the showdown is done)."""
+    originals = _showdown(conn, user_id, settings)
+    return bool(originals) and not _unfinished(conn, user_id, originals, settings)
+
+
 def retest_due(
     conn: sqlite3.Connection, user_id: str, settings: Settings, now: datetime
 ) -> bool:
