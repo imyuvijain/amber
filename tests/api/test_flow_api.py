@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from amber.api import app as app_module
 from amber.api.app import create_app
 from amber.flow import allowed_ids
-from amber.store.db import get_predictions
+from amber.store.db import get_answers, get_predictions
 
 MEN_APPAREL = {"genders": ["Men"], "sections": ["Apparel"]}
 
@@ -647,3 +647,49 @@ def test_ceiling_waits_for_the_whole_retest(client, ctx, monkeypatch):
     client.post(f"/api/pairs/{r['pair_id']}/choose", json={"chosen_id": r["a"]["id"]})
     res = client.get(f"/api/users/{uid}/results").json()
     assert res["ceiling"] is None and res["retest_due"] is True
+
+
+# --- the Yous are frozen once the showdown starts --------------------------------
+
+
+def test_style_and_ipip_are_409_once_the_yous_are_frozen(client, ctx):
+    uid = _new_user(client, **MEN_APPAREL)
+    client.put(f"/api/users/{uid}/style", json={"words": ["minimal"]})
+    _play(client, uid, "train", domain="art")
+    _next(client, uid)  # the first clothing pair freezes the Yous
+    from amber.yous.stated import load_style_words
+
+    other = [w for w in load_style_words() if w != "minimal"][:2]
+    r = client.put(f"/api/users/{uid}/style", json={"words": other})
+    assert r.status_code == 409
+    from amber.yous.bigfive import load_ipip
+
+    r = client.put(f"/api/users/{uid}/ipip", json={"answers": {load_ipip()[0].id: 3}})
+    assert r.status_code == 409
+    assert get_answers(ctx.conn, uid, "stated") == {"words": json.dumps(["minimal"])}
+    assert get_answers(ctx.conn, uid, "ipip") == {}
+
+
+def test_results_use_the_frozen_yous_not_the_current_answers(client, ctx):
+    from amber.store.db import save_answer
+    from amber.yous.stated import load_style_words
+
+    uid = _new_user(client, **MEN_APPAREL)
+    client.put(f"/api/users/{uid}/style", json={"words": ["minimal"]})
+    _play(client, uid, "train", domain="art")
+    _play(client, uid, "showdown")
+    before = client.get(f"/api/users/{uid}/results").json()
+    other = [w for w in load_style_words() if w != "minimal"][:3]
+    save_answer(
+        ctx.conn, uid, "stated", "words", json.dumps(other)
+    )  # past the API's 409
+    after = client.get(f"/api/users/{uid}/results").json()
+    for key in ("cosines", "map", "readout", "scores_all"):
+        assert after[key] == before[key], key
+
+
+def test_amber_now_logs_a_warning(ctx, monkeypatch, caplog):
+    monkeypatch.setenv("AMBER_NOW", "2030-01-01T00:00:00")
+    with caplog.at_level("WARNING", logger="amber.api.app"):
+        create_app(ctx)
+    assert "AMBER_NOW" in caplog.text

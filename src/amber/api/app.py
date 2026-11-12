@@ -5,6 +5,7 @@ One sqlite connection is shared by every request, so every handler that touches 
 """
 
 import json
+import logging
 import math
 import os
 import re
@@ -54,12 +55,14 @@ from amber.store.db import (
     create_user,
     get_predictions,
     list_choices,
+    load_yous,
     save_answer,
     user_exists,
 )
-from amber.yous.base import YOU_ORDER
+from amber.yous.base import YOU_ORDER, You
 from amber.yous.bigfive import load_ipip, score_ipip
 from amber.yous.registry import build_all_yous
+from amber.yous.revealed import build_revealed
 from amber.yous.stated import load_style_words, load_style_words_rows
 
 MAX_STYLE_WORDS = 5
@@ -68,6 +71,7 @@ WEB_DIST = REPO_ROOT / "web" / "dist"
 DEV_ORIGIN = "http://localhost:5173"
 _THUMB_NAME = re.compile(r"[0-9]+\.jpg")
 _NOT_LABELS = ("id", "title")
+log = logging.getLogger(__name__)
 
 
 def now() -> datetime:
@@ -135,6 +139,11 @@ def _item_table(items: pd.DataFrame, domain: str) -> dict[str, dict]:
 
 def create_app(ctx: AppContext) -> FastAPI:
     app = FastAPI(title="Amber")
+    if os.environ.get("AMBER_NOW"):
+        log.warning(
+            "AMBER_NOW is set (%s): the retest clock is shifted; dev use only",
+            os.environ["AMBER_NOW"],
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[DEV_ORIGIN],
@@ -143,6 +152,21 @@ def create_app(ctx: AppContext) -> FastAPI:
     )
     lock = threading.Lock()
     item_tables = {d: _item_table(ctx.items[d], d) for d in DOMAINS}
+
+    def current_yous(uid: str) -> dict[str, You]:
+        """The Yous behind the scored predictions: the frozen ones as saved, plus Revealed
+        rebuilt from the showdown picks. Before the freeze (no clothes pair yet) nothing is
+        frozen, so every You is built from the answers as they stand."""
+        frozen = load_yous(ctx.conn, uid)
+        if not frozen:
+            return build_all_yous(ctx.conn, uid, ctx)
+        yous = {name: You(name, w, meta) for name, (w, meta) in frozen.items()}
+        yous["revealed"] = build_revealed(ctx.conn, uid, ctx)
+        return yous
+
+    def require_frozen_open(uid: str) -> None:
+        if load_yous(ctx.conn, uid):
+            raise HTTPException(409, "your answers are frozen: the showdown has begun")
 
     def require_user(user_id: str) -> None:
         if not user_exists(ctx.conn, user_id):
@@ -178,6 +202,7 @@ def create_app(ctx: AppContext) -> FastAPI:
     def put_style(uid: str, body: StyleIn) -> dict:
         with lock:
             require_user(uid)
+            require_frozen_open(uid)
             if not 1 <= len(body.words) <= MAX_STYLE_WORDS:
                 raise HTTPException(422, f"pick 1 to {MAX_STYLE_WORDS} style words")
             if len(set(body.words)) != len(body.words):
@@ -197,6 +222,7 @@ def create_app(ctx: AppContext) -> FastAPI:
         the Big Five you abstains under 10."""
         with lock:
             require_user(uid)
+            require_frozen_open(uid)
             try:
                 score_ipip(body.answers)  # validates ids and 1..5
             except ValueError as exc:
@@ -261,7 +287,7 @@ def create_app(ctx: AppContext) -> FastAPI:
 
     def explain(uid: str, choices: list[Choice]) -> dict:
         """The Yous as they stand after every pick: cosines, the map and the readout."""
-        yous = build_all_yous(ctx.conn, uid, ctx)
+        yous = current_yous(uid)
         clothes = ctx.index["clothes"]
         dots = sample_ids(sorted(allowed_ids(ctx.conn, uid, ctx)), MAP_CLOTHES)
         return {
@@ -354,7 +380,7 @@ def create_app(ctx: AppContext) -> FastAPI:
             raise HTTPException(422, f"unknown you: {you}")
         with lock:
             require_user(uid)
-            yous = build_all_yous(ctx.conn, uid, ctx)
+            yous = current_yous(uid)
             found = search(
                 query,
                 yous.get(you),

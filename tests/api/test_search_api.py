@@ -132,3 +132,20 @@ def test_retest_picks_never_feed_a_you(client, ctx, monkeypatch):
         f"/api/users/{uid}/search", params={"q": "shirt", "you": "revealed"}
     ).json()
     assert after == before
+
+
+def test_search_uses_the_frozen_yous_not_the_current_answers(client, ctx):
+    import json
+
+    from amber.store.db import save_answer
+    from amber.yous.stated import load_style_words
+
+    uid = _ready(client)
+    params = {"q": "jacket", "you": "stated"}
+    before = client.get(f"/api/users/{uid}/search", params=params).json()
+    assert before["personal"]  # stated is frozen with "minimal"
+    other = [w for w in load_style_words() if w != "minimal"][:3]
+    save_answer(
+        ctx.conn, uid, "stated", "words", json.dumps(other)
+    )  # past the API's 409
+    assert client.get(f"/api/users/{uid}/search", params=params).json() == before
