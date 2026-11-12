@@ -100,3 +100,29 @@ def learning_curve(
     return [
         float(np.mean(credit[max(0, i + 1 - size) : i + 1])) for i in range(len(credit))
     ]
+
+
+def self_consistency(original: list[Choice], retest: list[Choice]) -> float | None:
+    """How often the person picked the same *item* again on the retest: the ceiling.
+
+    Compares chosen item ids, never sides, since a retest may swap `a` and `b`. A retest
+    pick is matched to its original through `retest_of`; unanswered retests, and retests
+    of a pair that is not in `original` (or was never answered), are skipped. `None` when
+    nothing is left to compare.
+    """
+    first = {c.pair_id: c.chosen_id for c in original if c.chosen_id is not None}
+    same = [
+        c.chosen_id == first[c.retest_of]
+        for c in retest
+        if c.chosen_id is not None and c.retest_of in first
+    ]
+    return float(np.mean(same)) if same else None
+
+
+def normalized_accuracy(accuracy: float, ceiling: float) -> float | None:
+    """`(accuracy - 0.5) / (ceiling - 0.5)`: the share of the person's own consistency that
+    a You captured, 0 at a coin flip and 1 at the ceiling (it can go below 0 or above 1).
+    `None` when the ceiling is at or below chance, where the ratio means nothing."""
+    if ceiling <= 0.5:
+        return None
+    return (accuracy - 0.5) / (ceiling - 0.5)
