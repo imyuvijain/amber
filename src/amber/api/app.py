@@ -1,4 +1,4 @@
-"""FastAPI app: users, filters, style words, the quiz, pairs, choosing, results, thumbs.
+"""FastAPI app: users, filters, style words, the quiz, pairs, choosing, results, search, thumbs.
 
 One sqlite connection is shared by every request, so every handler that touches it holds
 `lock` (sync handlers run in a threadpool). If `web/dist` exists it is served at `/`.
@@ -14,13 +14,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from amber.config import REPO_ROOT
+from amber.config import REPO_ROOT, SEARCH_CANDIDATES, SEARCH_LAMBDA, SEARCH_RESULTS
 from amber.context import DOMAINS, AppContext
 from amber.data.catalog import thumb_path
 from amber.eval.metrics import (
@@ -44,6 +44,7 @@ from amber.explain.geometry import (
 )
 from amber.explain.readout import Readout, build_readout
 from amber.flow import CatalogExhausted, allowed_ids, next_pair, progress
+from amber.search.rerank import search
 from amber.store.db import (
     AlreadyAnswered,
     Choice,
@@ -56,11 +57,13 @@ from amber.store.db import (
     save_answer,
     user_exists,
 )
+from amber.yous.base import YOU_ORDER
 from amber.yous.bigfive import load_ipip, score_ipip
 from amber.yous.registry import build_all_yous
 from amber.yous.stated import load_style_words, load_style_words_rows
 
 MAX_STYLE_WORDS = 5
+MAX_QUERY_CHARS = 100
 WEB_DIST = REPO_ROOT / "web" / "dist"
 DEV_ORIGIN = "http://localhost:5173"
 _THUMB_NAME = re.compile(r"[0-9]+\.jpg")
@@ -335,6 +338,39 @@ def create_app(ctx: AppContext) -> FastAPI:
                 **explain(uid, choices),
                 **retest_fields(uid, all_scores),
             }
+
+    @app.get("/api/users/{uid}/search")
+    def get_search(
+        uid: str,
+        q: str = Query(max_length=MAX_QUERY_CHARS),
+        you: str = "art",
+    ) -> dict:
+        """Clothes matching `q` among the person's allowed sections: the plain top results
+        and the same candidates reranked by one of their Yous (empty if that You abstains)."""
+        query = q.strip()
+        if not query:
+            raise HTTPException(422, "type or tap something to search for")
+        if you not in YOU_ORDER:
+            raise HTTPException(422, f"unknown you: {you}")
+        with lock:
+            require_user(uid)
+            yous = build_all_yous(ctx.conn, uid, ctx)
+            found = search(
+                query,
+                yous.get(you),
+                ctx.encoder,
+                ctx.index["clothes"],
+                allowed_ids(ctx.conn, uid, ctx),
+                n_candidates=SEARCH_CANDIDATES,
+                n_results=SEARCH_RESULTS,
+                lam=SEARCH_LAMBDA,
+            )
+        table = item_tables["clothes"]
+        return {
+            "you": you,
+            "generic": [table[i] for i in found.generic],
+            "personal": [table[i] for i in found.personal],
+        }
 
     @app.get("/thumbs/{domain}/{name}")
     def get_thumb(domain: str, name: str) -> FileResponse:
