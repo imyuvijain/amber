@@ -50,7 +50,9 @@ def test_shape_index_and_finite(personal):
 
 def test_no_future_leakage(personal):
     flipped = personal.copy()
-    flipped.loc[flipped.index >= 500, "skip"] = ~flipped.loc[flipped.index >= 500, "skip"]
+    flipped.loc[flipped.index >= 500, "skip"] = ~flipped.loc[
+        flipped.index >= 500, "skip"
+    ]
     a = build_features(personal)
     b = build_features(flipped)
     pd.testing.assert_frame_equal(a.iloc[:501], b.iloc[:501])
@@ -148,7 +150,14 @@ def test_platform_shuffle_and_reason_encoding():
     df = _rows([("2024-01-01 10:00", "a", "t1", False)] * 1)
     df = pd.concat([df] * 6, ignore_index=True)
     df["ts"] = df["ts"] + pd.to_timedelta(range(6), unit="s")
-    df["platform"] = ["Android OS 12", "iOS 17", "Windows 10", "web_player", "Sonos", None]
+    df["platform"] = [
+        "Android OS 12",
+        "iOS 17",
+        "Windows 10",
+        "web_player",
+        "Sonos",
+        None,
+    ]
     df["reason_start"] = ["clickrow", "trackdone", "fwdbtn", "playbtn", "appload", None]
     df["shuffle"] = pd.array([True, False, pd.NA, True, True, True], dtype="boolean")
     f = build_features(df)
@@ -176,7 +185,9 @@ def test_platform_shuffle_and_reason_encoding():
 
 
 def test_account_format_is_finite(tmp_path):
-    df = load_export(write_fake_export(tmp_path, "personal", n_plays=500, fmt="account"))
+    df = load_export(
+        write_fake_export(tmp_path, "personal", n_plays=500, fmt="account")
+    )
     feats = build_features(df)
     assert np.isfinite(feats.to_numpy(dtype=float)).all()
     assert (feats["shuffle_known"] == 0).all()
