@@ -98,7 +98,7 @@ uv run amber decide sources                             # the real thing: reads 
 - **Where to put the files:** Google Takeout in `data/exports/google/`, Instagram (Meta) in `data/exports/meta/` (or `instagram/`). Google files are found by name (`MyActivity`, `watch-history`, `search-history`; HTML, the Takeout default, or JSON), Instagram by file name, so folder names don't matter.
 - **Output:** one event log (`ts`, `source`, `kind`, `item_id`, `creator_id`, `text`, `url`, `from_ads`) in `data/decide/events.parquet`. The command prints counts, date ranges and active months per source and kind, and never a title, query, URL or username.
 - **Allow-listed paths only:** Search, YouTube, Discover, Maps, Shopping and a few other My Activity products; a fixed list of Instagram activity files. Gemini, messages, media and contacts are never opened.
-- **HTML dates** end in a timezone abbreviation and are read as wall-clock time in that zone (EST/EDT New York, PST/PDT Los Angeles, CST/CDT Chicago, MST/MDT Denver, UTC/GMT, IST India, JST, CET/CEST Berlin, BST London). An unlisted abbreviation counts as a bad row.
+- **HTML dates** end in a timezone abbreviation and are read literally as fixed UTC offsets (EST −5, EDT −4, CST −6, CDT −5, MST −7, MDT −6, PST −8, PDT −7, UTC/GMT 0, IST +5:30 India, JST +9, CET +1, CEST +2, BST +1). Takeout prints one label all year ("EST" even in July), so reading it as New York time would shift summer rows by an hour. An unlisted abbreviation counts as a bad row.
 
 ## Caveats
 

@@ -52,7 +52,7 @@ def test_watch_entry(tmp_path):
     assert r["creator_id"] == "https://www.youtube.com/channel/UCfake1"
     assert r["url"] == "https://www.youtube.com/watch?v=abc123"
     assert not r["from_ads"]
-    # 2:47:58 PM EST -> 19:47:58 UTC (wall clock in America/New_York)
+    # 2:47:58 PM EST -> 19:47:58 UTC (EST is a fixed UTC-5)
     assert r["ts"].isoformat() == "2026-11-13T19:47:58+00:00"
     assert df.attrs["n_files"] == 1 and df.attrs["n_bad_rows"] == 0
 
@@ -221,6 +221,8 @@ def test_history_html_without_header_defaults_to_youtube(tmp_path):
         ("Jan 4, 2026, 9:00:00 AM IST", "2026-01-04T03:30:00+00:00"),
         ("Jul 4, 2026, 9:00:00 AM CEST", "2026-07-04T07:00:00+00:00"),
         ("Jan 4, 2026, 9:00:00 AM JST", "2026-01-04T00:00:00+00:00"),
+        # Takeout labels summer rows "EST" too: read literally as UTC-5, not as EDT.
+        ("Jul 4, 2026, 9:00:00 AM EST", "2026-07-04T14:00:00+00:00"),
     ],
 )
 def test_timezone_abbreviations(tmp_path, stamp, utc):

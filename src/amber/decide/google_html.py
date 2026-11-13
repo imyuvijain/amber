@@ -10,35 +10,31 @@ formats. It uses regex plus ``html.unescape`` (no extra dependency) and is linea
 the file size.
 
 Dates carry a timezone *abbreviation* (``Nov 13, 2026, 2:47:58 PM EST``, with a
-U+202F before the AM/PM). They are read as wall-clock time in the zone below; an
-abbreviation not listed is a bad row. ``IST`` is read as India, not Israel or Ireland.
+U+202F before the AM/PM). Each is read as the fixed UTC offset below (EST is
+always UTC-5); an abbreviation not listed is a bad row. ``IST`` is read as India, not Israel or Ireland.
 """
 
 import html
 import re
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-TZ_ABBREVIATIONS: dict[str, str] = {
-    "EST": "America/New_York",
-    "EDT": "America/New_York",
-    "PST": "America/Los_Angeles",
-    "PDT": "America/Los_Angeles",
-    "CST": "America/Chicago",
-    "CDT": "America/Chicago",
-    "MST": "America/Denver",
-    "MDT": "America/Denver",
-    "UTC": "UTC",
-    "GMT": "UTC",
-    "IST": "Asia/Kolkata",
-    "JST": "Asia/Tokyo",
-    "CET": "Europe/Berlin",
-    "CEST": "Europe/Berlin",
-    "BST": "Europe/London",
+# Each abbreviation is read literally as a fixed UTC offset in hours. Takeout prints
+# one label for the whole file (a real Waterloo account shows "EST" even in July), so
+# mapping EST to New York's DST rules would shift summer rows by an hour.
+TZ_ABBREVIATIONS: dict[str, float] = {
+    "EST": -5, "EDT": -4,
+    "CST": -6, "CDT": -5,
+    "MST": -7, "MDT": -6,
+    "PST": -8, "PDT": -7,
+    "UTC": 0, "GMT": 0,
+    "IST": 5.5,
+    "JST": 9,
+    "CET": 1, "CEST": 2,
+    "BST": 1,
 }
-_ZONES = {abbr: ZoneInfo(name) for abbr, name in TZ_ABBREVIATIONS.items()}
+_ZONES = {abbr: timezone(timedelta(hours=h)) for abbr, h in TZ_ABBREVIATIONS.items()}
 
 _OUTER = re.compile(r'<div class="outer-cell[^"]*">')
 _HEADER = re.compile(r'class="header-cell[^"]*">(.*?)</div>', re.DOTALL)
