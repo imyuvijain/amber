@@ -82,7 +82,7 @@ def test_private_report_lists_artists_and_stays_out_of_public(fakes):
     run = fakes["personal"]
     private = (run["out"] / "report.md").read_text()
     assert "Fake Artist" in private
-    assert "most skipped" in private.lower() and "most kept" in private.lower()
+    assert "skip most" in private and "keep most" in private
     assert "Fake Artist" not in (run["out"] / "public.md").read_text()
 
 
@@ -101,8 +101,9 @@ def test_headline_wording(fakes):
 def test_headline_template_values(fakes):
     result = fakes["personal"]["result"]
     gap = _gap(result, "context", "memory")
+    verb = "beats" if gap["ci"][0] > 0 else "does not beat"
     expected = (
-        f"Remembering you beats context-only listening habits: log-loss gain "
+        f"Remembering you {verb} context-only listening habits: log-loss gain "
         f"{gap['ll_gain']:.3f} (95% CI {gap['ci'][0]:.3f} to {gap['ci'][1]:.3f}) "
         f"on {result['n_holdout']} held-out plays, base skip rate "
         f"{result['base_rate_holdout']:.0%}."
