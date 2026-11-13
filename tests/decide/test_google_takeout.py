@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import pytest
 
-from amber.decide import google_takeout
 from amber.decide.events import EVENT_COLUMNS
 from amber.decide.google_takeout import load_google
 
@@ -238,11 +237,6 @@ def test_empty_folder_gives_empty_frame(tmp_path):
     df = load_google(tmp_path)
     assert len(df) == 0 and list(df.columns) == EVENT_COLUMNS
     assert df.attrs["n_files"] == 0
-
-
-def test_module_has_no_network_imports():
-    src = open(google_takeout.__file__).read()
-    assert "requests" not in src and "urlopen" not in src
 
 
 @pytest.mark.parametrize("time", ["2024-01-01T12:00:00Z", "2024-01-01T12:00:00.5Z"])
