@@ -2,7 +2,7 @@
 
 A personal decision engine, trained on your own data exports.
 
-The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. The goal: a model you own that eventually sees more than any single platform does. Nothing is asked of you except the files you already have the right to download.
+The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. The aim: a model you own that eventually sees more than any single platform does. Nothing is asked of you except the files you already have the right to download.
 
 ## Status
 
@@ -30,7 +30,7 @@ The ladder. Each rung adds one kind of knowledge, so the gaps between rungs are 
 | Rung | Knows |
 |---|---|
 | base rate | your running skip rate |
-| context | when and how you listen (hour, weekday, platform, shuffle, how the play started, position in session, gap since the previous play, whether that one was skipped) |
+| context | when and how you listen (hour, weekday, platform, shuffle, how the play started, position in session, the gap before the previous play, whether that one was skipped) |
 | memory | context plus your past skip rate for this artist and track, and play counts |
 | recency | memory with exponentially decayed counts |
 
@@ -38,16 +38,16 @@ Label rule (frozen with git tag `decide-v1` before any real data): extended form
 
 ### Results so far: fake users only
 
-These are synthetic sanity checks, not a result about any real person. 5,000 fake plays, about 972 held out. Holdout log loss, lower is better (reproduce with `amber decide fake <folder> --kind personal --n-plays 5000`, or `--kind null`):
+These are synthetic sanity checks, not a result about any real person. 5,000 fake plays generated, about 4,850 left after the loader drops podcasts, private-session plays and a few near-duplicates, about 971 held out. Holdout log loss, lower is better (reproduce with `amber decide fake <folder> --kind personal --n-plays 5000`, or `--kind null`):
 
 | User | base | context | memory | recency |
 |---|---|---|---|---|
 | personal (planted skip structure) | 0.670 | 0.650 | 0.562 | 0.526 |
 | null (skips are random) | 0.602 | 0.602 | 0.601 | 0.602 |
 
-Holdout accuracy: the personal user goes from 60.9% (base rate) to 73.9% (recency); every rung on the null user is 71.1%, the base rate.
+Holdout accuracy: the personal user goes from 61.0% (base rate) to 73.9% (recency); every rung on the null user is 71.1%, the base rate.
 
-On the personal user, memory beats context by 0.088 log loss (95% CI 0.067 to 0.109). On the null user every gap's CI contains 0, as it should.
+On the personal user, memory beats context by 0.088 log loss (95% CI 0.068 to 0.109). On the null user every gap's CI contains 0, as it should.
 
 **Two leaks the null user caught during the build, both fixed before the freeze.** Spotify's `ts` is the play's end time, so a "gap since last play" feature secretly encoded the play's own duration; the null user, who has no signal, scored AUC 0.957 before the fix in commit 9f84dfe ("decisions happen at play start"). Fix: decisions are timestamped at play start (`ts` minus `ms_played`). Then `ms_played` turned out to exclude pauses, so the current play's gap is replaced by the gap before the previous play. A null control that fails loudly is useful evidence the evaluation catches leaks. The real run is pending.
 
@@ -67,13 +67,15 @@ uv run amber decide ingest
 uv run amber decide eval --tz <Area/City>                      # your timezone; add --publish for the aggregates-only report
 ```
 
-`ingest` and `eval` write to `data/decide/`, so a fake run and a real run overwrite the same private files. `eval` writes the full private report there. With `--publish` it also copies an aggregates-only report to `docs/results/`; don't publish a fake run.
+`ingest` and `eval` write to `data/decide/`, so a fake run and a real run overwrite the same private files. `eval` writes the full private report there. With `--publish` it also copies an aggregates-only report to `docs/results/`; `--publish` refuses (non-zero exit, nothing written) when the run used synthetic data.
+
+The loader also drops near-duplicate plays (the same track again within 60 s of its earlier play, which usually means a re-logged copy) and counts plays that start more than 5 s before the previous play ended (overlap, kept, e.g. two devices). `ingest`, `eval` and both reports print both counts. The headline says "beats" only if memory beats context and also beats the base rate, each with a 95% CI above zero; it always shows the memory-versus-base gain too.
 
 ### What export to request
 
 1. Go to [spotify.com/account/privacy](https://www.spotify.com/account/privacy).
 2. Request **Extended streaming history** (it can take up to 30 days). Optionally also request **Account data** (about 5 days); it is coarser and is ignored when the extended files are present.
-3. Put the files in `data/exports/spotify/`.
+3. Put the files in `data/exports/spotify/`. Older names work too: `endsong_*.json` (extended) and `StreamingHistory[0-9]*.json` (account; podcast rows are dropped).
 
 ### Privacy
 
