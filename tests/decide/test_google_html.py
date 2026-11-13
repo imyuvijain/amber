@@ -119,8 +119,8 @@ def test_no_link_entries(tmp_path):
         entry("YouTube", "Watched a video that has been removed<br>" + date()),
         entry("Maps", "Used Maps<br>" + date("Nov 3, 2026, 8:00:00 AM EST")),
     )
-    df = load_google(tmp_path)
-    a, b = df.iloc[0], df.iloc[1]
+    df = load_google(tmp_path)  # sorted by time: the Maps entry is earlier
+    b, a = df.iloc[0], df.iloc[1]
     assert (a["source"], a["kind"]) == ("youtube", "watch")
     assert a["item_id"] is None or a["item_id"] != a["item_id"]
     assert (b["source"], b["kind"]) == ("google", "activity")

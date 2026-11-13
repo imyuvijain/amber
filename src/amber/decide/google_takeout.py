@@ -1,9 +1,10 @@
 """Parse a Google Takeout export (My Activity and YouTube history) into event rows.
 
-Files are found recursively **by filename** (``MyActivity.json``,
-``watch-history.json``, ``search-history.json``), never by folder path, because
-Takeout folder names are localised. The kind of a row comes from its URL, not
-from its (localised) title. Only an allow-list of My Activity products is read;
+Files are found recursively **by filename** (``MyActivity``, ``watch-history`` and
+``search-history``, as ``.html`` (Takeout's default) or ``.json``), never by folder path,
+because Takeout folder names are localised. The one exception is a folder named
+``Gemini Apps``, which is never opened. The kind of a row comes from its URL, not
+from its (localised) title; a YouTube "Liked" verb (HTML only) makes it a ``like``. Only an allow-list of My Activity products is read;
 anything else (Gemini Apps, Chrome, ...) is skipped and counted.
 """
 
@@ -15,11 +16,14 @@ from urllib.parse import parse_qs, urlparse
 import pandas as pd
 
 from amber.decide.events import events_frame
+from amber.decide.google_html import parse_activity_html
 
 log = logging.getLogger(__name__)
 
-ACTIVITY_FILE = "MyActivity.json"
-YOUTUBE_FILES = ("watch-history.json", "search-history.json")
+ACTIVITY_STEM = "MyActivity"
+YOUTUBE_STEMS = ("watch-history", "search-history")
+EXTENSIONS = (".html", ".json")
+NEVER_OPEN_FOLDERS = {"gemini apps"}
 ALLOWED_PRODUCTS = {
     p.casefold()
     for p in (
@@ -39,9 +43,17 @@ ALLOWED_PRODUCTS = {
 ADS_MARKER = "from google ads"
 
 
-def _find(path: Path) -> list[Path]:
-    names = (ACTIVITY_FILE, *YOUTUBE_FILES)
-    return sorted({f for name in names for f in path.rglob(name) if f.is_file()})
+def _find(path: Path) -> tuple[list[Path], list[Path]]:
+    """``(files to read, files never opened)``."""
+    found = {
+        f
+        for stem in (ACTIVITY_STEM, *YOUTUBE_STEMS)
+        for ext in EXTENSIONS
+        for f in path.rglob(stem + ext)
+        if f.is_file()
+    }
+    never = {f for f in found if NEVER_OPEN_FOLDERS & {p.casefold() for p in f.parts}}
+    return sorted(found - never), sorted(never)
 
 
 def _first(params: dict, key: str) -> str | None:
@@ -74,10 +86,14 @@ def _classify(row: dict, product: str) -> tuple[str, str, str | None]:
     url = row.get("titleUrl")
     url = url if isinstance(url, str) and url else None
     is_youtube = product.casefold() == "youtube"
+    verb = row.get("verb")
+    liked = is_youtube and isinstance(verb, str) and verb.casefold().startswith("liked")
     if url:
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
         hit = _youtube(parsed, params)
+        if liked:
+            return "youtube", "like", hit[1] if hit and hit[0] == "watch" else url
         if hit:
             return "youtube", hit[0], hit[1]
         host = _host(parsed)
@@ -86,6 +102,8 @@ def _classify(row: dict, product: str) -> tuple[str, str, str | None]:
         if product.casefold() == "search":
             target = _first(params, "q") if _is_google_host(host) and parsed.path == "/url" else None
             return "google", "visit", target or url
+    elif liked:
+        return "youtube", "like", None
     elif is_youtube:
         return "youtube", "watch", None  # a removed video has no URL
     source = "youtube" if is_youtube else "google"
@@ -127,16 +145,23 @@ def _from_ads(row: dict) -> bool:
 
 
 def _ts(value) -> pd.Timestamp | None:
+    if isinstance(value, pd.Timestamp):
+        return value
     if not isinstance(value, str):
         return None
     ts = pd.to_datetime(value, utc=True, errors="coerce")
     return None if pd.isna(ts) else ts
 
 
-def _read_list(f: Path) -> list | None:
+def _read_entries(f: Path) -> list | None:
+    """The raw activity rows of one file; None if it cannot be read as an activity file."""
     try:
-        data = json.loads(f.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
+        text = f.read_text(encoding="utf-8")
+        if f.suffix.casefold() == ".html":
+            entries = parse_activity_html(text)
+            return entries or None  # a page with no entries is not a Takeout activity page
+        data = json.loads(text)
+    except (OSError, ValueError) as e:  # includes UnicodeDecodeError
         log.warning("skipping unreadable Google file %s: %s", f, e)
         return None
     if not isinstance(data, list):
@@ -145,22 +170,33 @@ def _read_list(f: Path) -> list | None:
     return data
 
 
+def _default_product(f: Path) -> str | None:
+    """Product for a row with no header: YouTube history files, else the parent folder."""
+    if f.stem in YOUTUBE_STEMS:
+        return "YouTube"
+    return f.parent.name if f.suffix.casefold() == ".html" else None
+
+
 def load_google(path: Path) -> pd.DataFrame:
     """Load Google and YouTube activity from a Takeout folder (searched recursively).
 
-    Returns ``EVENT_COLUMNS`` sorted by ``ts`` with duplicates dropped. ``df.attrs``
-    carries ``n_files`` (parsed), ``n_skipped_files`` (unreadable), ``n_bad_rows``
-    (not an object or no valid time) and ``n_skipped_rows`` (products off the allow-list).
+    Reads both the HTML (default) and the JSON Takeout formats. Returns
+    ``EVENT_COLUMNS`` sorted by ``ts`` with duplicates dropped. ``df.attrs`` carries
+    ``n_files`` (parsed), ``n_skipped_files`` (unreadable, or under a ``Gemini Apps``
+    folder and never opened), ``n_bad_rows`` (not an object, or no valid time) and
+    ``n_skipped_rows`` (products off the allow-list).
     """
     stats = {"n_files": 0, "n_skipped_files": 0, "n_bad_rows": 0, "n_skipped_rows": 0}
     rows: list[dict] = []
-    for f in _find(Path(path)):
-        data = _read_list(f)
+    files, never_opened = _find(Path(path))
+    stats["n_skipped_files"] += len(never_opened)
+    for f in files:
+        data = _read_entries(f)
         if data is None:
             stats["n_skipped_files"] += 1
             continue
         stats["n_files"] += 1
-        default = None if f.name == ACTIVITY_FILE else "YouTube"
+        default = _default_product(f)
         for r in data:
             if not isinstance(r, dict):
                 stats["n_bad_rows"] += 1
