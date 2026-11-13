@@ -5,7 +5,13 @@ import pandas as pd
 import pytest
 
 from amber.decide.features import CONTEXT_COLS, DECAY_COLS, MEMORY_COLS
-from amber.decide.model import RUNGS, OnlineLogit, run_frozen, run_ladder
+from amber.decide.model import (
+    RUNGS,
+    OnlineLogit,
+    holdout_start,
+    run_frozen,
+    run_ladder,
+)
 
 ALL_COLS = CONTEXT_COLS + MEMORY_COLS + DECAY_COLS
 LADDER_COLS = ["p_base", "p_context", "p_memory", "p_recency"]
@@ -43,8 +49,14 @@ def test_ladder_same_ts_no_update_between():
     skip[2] = True
     ts = pd.Series(
         pd.to_datetime(
-            ["2024-01-01 00:00", "2024-01-01 00:01", "2024-01-01 00:02",
-             "2024-01-01 00:02", "2024-01-01 00:03", "2024-01-01 00:04"],
+            [
+                "2024-01-01 00:00",
+                "2024-01-01 00:01",
+                "2024-01-01 00:02",
+                "2024-01-01 00:02",
+                "2024-01-01 00:03",
+                "2024-01-01 00:04",
+            ],
             utc=True,
         )
     )
@@ -145,4 +157,71 @@ def test_ladder_speed_50k():
     feats, skip, ts = _synthetic(50_000)
     t0 = time.time()
     run_ladder(feats, skip, ts)
-    assert time.time() - t0 < 10  # about 15 us per row per rung, so 300k rows is roughly 15 s
+    assert (
+        time.time() - t0 < 10
+    )  # about 15 us per row per rung, so 300k rows is roughly 15 s
+
+
+def test_late_one_hot_does_not_explode():
+    rng = np.random.default_rng(3)
+    n = 3000
+    x0 = rng.normal(size=n)
+    x1 = np.where(np.arange(n) < 2000, 0.0, rng.binomial(1, 0.3, size=n))
+    y = (x0 + 2 * x1 > 0.5).astype(bool)
+    X = np.column_stack([x0, x1])
+    model = OnlineLogit(2)
+    p = np.empty(n)
+    max_w = 0.0
+    for i in range(n):
+        p[i] = model.predict(X[i])
+        model.update(X[i], bool(y[i]))
+        max_w = max(max_w, np.abs(model.w).max())
+    assert max_w < 50
+    q = np.clip(p[2000:], 1e-4, 1 - 1e-4)
+    yy = y[2000:]
+    loss = -np.mean(yy * np.log(q) + (~yy) * np.log(1 - q))
+    assert loss < 0.5
+
+
+def test_holdout_start_plain():
+    ts = pd.Series(pd.date_range("2024-01-01", periods=10, freq="min", tz="UTC"))
+    assert holdout_start(ts) == 8
+    assert holdout_start(ts, 0.5) == 5
+
+
+def test_holdout_start_moves_back_to_group_start():
+    # split = 8; rows 6, 7, 8, 9 share a ts, so the group starts at 6
+    stamps = list(pd.date_range("2024-01-01", periods=6, freq="min", tz="UTC"))
+    stamps += [pd.Timestamp("2024-02-01", tz="UTC")] * 4
+    ts = pd.Series(stamps)
+    start = holdout_start(ts)
+    assert start == 6
+    assert ts.iloc[start - 1] != ts.iloc[start]
+    feats, skip, _ = _synthetic(10)
+    assert len(run_frozen(feats, skip, ts, "context")) == 10 - 6
+
+
+def test_holdout_start_one_row_back():
+    stamps = list(pd.date_range("2024-01-01", periods=7, freq="min", tz="UTC"))
+    stamps += [pd.Timestamp("2024-02-01", tz="UTC")] * 2 + [
+        pd.Timestamp("2024-03-01", tz="UTC")
+    ]
+    ts = pd.Series(stamps)  # split = 8, rows 7 and 8 share a ts
+    assert holdout_start(ts) == 7
+
+
+def test_holdout_start_all_same_ts():
+    ts = pd.Series([pd.Timestamp("2024-01-01", tz="UTC")] * 5)
+    assert holdout_start(ts) == 0
+
+
+def test_length_mismatch_raises():
+    feats, skip, ts = _synthetic(10)
+    with pytest.raises(ValueError):
+        run_ladder(feats, skip[:9], ts)
+    with pytest.raises(ValueError):
+        run_ladder(feats, skip, ts.iloc[:9])
+    with pytest.raises(ValueError):
+        run_frozen(feats.iloc[:9], skip, ts, "context")
+    with pytest.raises(ValueError):
+        run_frozen(feats, skip[:9], ts, "base")
