@@ -4,7 +4,10 @@ Files are found recursively and mapped to a kind **by file stem** (an allow-list
 Any other file, including ``messages/``, ``media/`` and contacts, is never opened:
 it is only counted as skipped. Instagram nests records in ``string_list_data`` or
 ``string_map_data`` and the keys drift between versions, so one generic record
-walker accepts either structure.
+walker accepts either structure. Exports from 2026 on use a third layout: a bare list
+of ``{"timestamp", "label_values": [...]}`` records, where each label is
+``{"label", "value", "href"}`` or a nested ``{"title": "Owner"|"Media", "dict": [...]}``
+section; ``_label_row`` reads that one.
 """
 
 import json
@@ -36,7 +39,15 @@ STEM_KINDS: dict[str, str] = {
     "word_or_phrase_searches": "ig_search",
     "tag_searches": "ig_search",
     "link_history": "link_open",
+    "profile_searches": "ig_search",
+    "stories_viewed": "view_story",
+    "liked_comments": "like_comment",
+    "posts_you're_interested_or_not_interested_in": "see_more",
+    "posts_you're_not_interested_in": "not_interested",
+    "profiles_you're_not_interested_in": "not_interested_profile",
 }
+# In the "interested or not" file the record's Feedback value decides the kind.
+FEEDBACK_KINDS = {"see more": "see_more", "not interested": "not_interested", "see less": "not_interested"}
 STEM_PREFIXES: dict[str, str] = {"post_comments": "comment", "comments": "comment"}
 ADS_KINDS = {"ad_view", "ad_click"}
 
@@ -120,7 +131,44 @@ def _first_str(*values) -> str | None:
     return None
 
 
+def _section(values: list, title: str) -> dict[str, str]:
+    """Flatten the nested ``{"title": title, "dict": [{"dict": [labels]}]}`` section."""
+    out: dict[str, str] = {}
+    for lv in values:
+        if isinstance(lv, dict) and lv.get("title") == title:
+            for group in lv.get("dict") or []:
+                for x in (group.get("dict") or []) if isinstance(group, dict) else []:
+                    if isinstance(x, dict) and x.get("label") and x.get("value"):
+                        out.setdefault(x["label"], x.get("href") or x["value"])
+    return out
+
+
+def _label_row(record: dict, kind: str, ts: pd.Timestamp) -> dict:
+    values = [v for v in record.get("label_values") or [] if isinstance(v, dict)]
+    flat = {v["label"]: v for v in values if v.get("label")}
+    get = lambda k: (flat.get(k) or {}).get("value")
+    if kind == "see_more":
+        kind = FEEDBACK_KINDS.get((get("Feedback") or "see more").casefold(), "see_more")
+    owner = _section(values, "Owner")
+    media = _section(values, "Media")
+    url = _first_str((flat.get("URL") or {}).get("href"), get("URL"), media.get("URL"))
+    creator = _first_str(owner.get("Username"), owner.get("URL"), owner.get("Name"))
+    text = _first_str(get("Caption"), get("Title"), get("Search"))
+    return {
+        "ts": ts,
+        "source": SOURCE,
+        "kind": kind,
+        "item_id": url,
+        "creator_id": creator,
+        "text": text,
+        "url": url,
+        "from_ads": kind in ADS_KINDS,
+    }
+
+
 def _row(record: dict, kind: str, ts: pd.Timestamp) -> dict:
+    if "label_values" in record:
+        return _label_row(record, kind, ts)
     items = _items(record)
     href = _first_str(*[x.get("href") for x in items], record.get("href"))
     value = _first_str(*[x.get("value") for x in items][:1])
