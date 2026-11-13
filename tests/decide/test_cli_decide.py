@@ -35,7 +35,7 @@ def test_cli_fake_ingest_eval(data_dir):
     parquet = data_dir / "decide" / "decisions.parquet"
     assert len(pd.read_parquet(parquet)) > 1000
 
-    r = runner.invoke(app, ["decide", "eval", "--tz", "Asia/Kolkata"])
+    r = runner.invoke(app, ["decide", "eval", "--tz", "Europe/Berlin"])
     assert r.exit_code == 0, r.output
     assert "Remembering you" in r.output
     assert (data_dir / "decide" / "public.md").exists()

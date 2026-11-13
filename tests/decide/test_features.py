@@ -95,16 +95,16 @@ def test_cold_start_finite():
 def test_timezone_shifts_hour():
     df = _rows([("2024-01-01 20:00", "a", "t1", False)])
     utc = build_features(df, tz="UTC").loc[0]
-    ist = build_features(df, tz="Asia/Kolkata").loc[0]
-    assert utc["hour_sin"] != ist["hour_sin"]
-    hour = np.arctan2(ist["hour_sin"], ist["hour_cos"]) * 24 / (2 * np.pi)
-    assert hour == pytest.approx(1.5)
-    # 2024-01-01 is a Monday in UTC but Tuesday in Kolkata: weekend uses local date.
-    sat = _rows([("2024-01-06 20:00", "a", "t1", False)])  # Saturday UTC, Sunday IST
+    berlin = build_features(df, tz="Europe/Berlin").loc[0]
+    assert utc["hour_sin"] != berlin["hour_sin"]
+    hour = np.arctan2(berlin["hour_sin"], berlin["hour_cos"]) * 24 / (2 * np.pi)
+    assert hour % 24 == pytest.approx(21.0)  # 20:00 UTC is 21:00 in winter
+    # Weekend uses the local date: Friday 23:30 UTC is already Saturday in Berlin.
+    sat = _rows([("2024-01-06 20:00", "a", "t1", False)])
     assert build_features(sat, tz="Pacific/Auckland").loc[0, "weekend"] == 1
-    fri = _rows([("2024-01-05 20:00", "a", "t1", False)])  # Friday UTC, Saturday IST
+    fri = _rows([("2024-01-05 23:30", "a", "t1", False)])
     assert build_features(fri, tz="UTC").loc[0, "weekend"] == 0
-    assert build_features(fri, tz="Asia/Kolkata").loc[0, "weekend"] == 1
+    assert build_features(fri, tz="Europe/Berlin").loc[0, "weekend"] == 1
 
 
 def test_session_reset():

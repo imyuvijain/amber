@@ -34,7 +34,7 @@ WINDOW_S = 730 * 86_400  # about two years
 SESSION_GAP_S = 2 * 3600
 SKIP_MS = 30_000  # a skip is shorter than this
 CHUNK = 3000  # rows per file
-COUNTRIES = ["US", "GB", "IN", "DE"]
+COUNTRIES = ["DE", "US", "GB", "FR"]
 
 
 def _catalog(rng: np.random.Generator) -> list[list[dict]]:

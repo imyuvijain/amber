@@ -1,6 +1,6 @@
 # Amber v0, first run: an honest negative result
 
-Amber v0 asked: can a model that never sees your clothing choices (your art taste, your personality, your own words) predict which clothes you pick? One person, the owner, played the real run on 2026-11-13 (user `0dbf669f444f41deba316126a4a8819b`). Numbers below come from `GET /api/users/<id>/results`.
+Amber v0 asked: can a model that never sees your clothing choices (your art taste, your personality, your own words) predict which clothes you pick? One person, the owner, played the real run on 2026-11-13 (the owner's run). Numbers below come from `GET /api/users/<id>/results`.
 
 **Verdict: no.** The art you scored 52.5% over 40 pairs, which is a coin flip. The owner also rejected the experience (see the end). Amber v0 is closed and v1 drops the quiz.
 

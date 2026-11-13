@@ -163,6 +163,6 @@ def test_reports_state_the_pause_limitation(fakes):
 def test_period_uses_local_months():
     from amber.decide.report import period
 
-    df = pd.DataFrame({"ts": pd.to_datetime(["2024-01-31 20:00", "2024-03-01 00:30"], utc=True)})
+    df = pd.DataFrame({"ts": pd.to_datetime(["2024-01-31 23:30", "2024-03-01 00:30"], utc=True)})
     assert period(df) == ("2024-01", "2024-03")
-    assert period(df, "Asia/Kolkata") == ("2024-02", "2024-03")
+    assert period(df, "Europe/Berlin") == ("2024-02", "2024-03")

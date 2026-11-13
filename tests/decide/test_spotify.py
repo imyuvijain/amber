@@ -12,7 +12,7 @@ def ext_row(ts="2024-01-01T12:00:00Z", uri="spotify:track:a", **over):
         "ts": ts,
         "platform": "iOS 17",
         "ms_played": 1000,
-        "conn_country": "IN",
+        "conn_country": "DE",
         "ip_addr": "1.2.3.4",
         "master_metadata_track_name": "Song",
         "master_metadata_album_artist_name": "Artist",

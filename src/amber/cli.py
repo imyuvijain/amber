@@ -444,7 +444,7 @@ def decide_eval(
         Path | None,
         typer.Argument(help="Spotify export folder (default: <data dir>/exports/spotify)."),
     ] = None,
-    tz: Annotated[str, typer.Option(help="Your timezone, e.g. Asia/Kolkata.")] = "UTC",
+    tz: Annotated[str, typer.Option(help="Your timezone, e.g. Europe/Berlin.")] = "UTC",
     publish: Annotated[
         bool, typer.Option(help="Also copy the aggregates-only report to docs/results.")
     ] = False,

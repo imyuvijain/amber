@@ -64,7 +64,7 @@ uv run amber decide eval data/exports/fake
 
 # the real thing, from data/exports/spotify/ (see below)
 uv run amber decide ingest
-uv run amber decide eval --tz Asia/Kolkata                      # your timezone; add --publish for the aggregates-only report
+uv run amber decide eval --tz <Area/City>                      # your timezone; add --publish for the aggregates-only report
 ```
 
 `ingest` and `eval` write to `data/decide/`, so a fake run and a real run overwrite the same private files. `eval` writes the full private report there. With `--publish` it also copies an aggregates-only report to `docs/results/`; don't publish a fake run.
