@@ -1,8 +1,9 @@
 """Parse a Spotify data export into one row per music play.
 
 Two export formats exist. The extended streaming history
-(``Streaming_History_Audio_*.json``) is richer, so when it is present the
-account-data files (``StreamingHistory_music_*.json``) are ignored. Private
+(``Streaming_History_Audio_*.json``, or the older ``endsong_*.json``) is richer,
+so when it is present the account-data files (``StreamingHistory_music_*.json``,
+or the older ``StreamingHistory[0-9]*.json``) are ignored. Private
 fields (``ip_addr``, ``conn_country``) are never copied out of the raw rows.
 """
 
@@ -29,6 +30,8 @@ DECISION_COLUMNS: list[str] = [
 ]
 
 ACCOUNT_SKIP_MS = 30_000  # account format: a play shorter than this is a skip
+EXTENDED_PATTERNS = ["Streaming_History_Audio_*.json", "endsong_*.json"]
+ACCOUNT_PATTERNS = ["StreamingHistory_music_*.json", "StreamingHistory[0-9]*.json"]
 
 
 def _read_rows(files: list[Path]) -> list[dict]:
@@ -55,7 +58,24 @@ def _start_ts(ts: pd.Series, ms_played: pd.Series) -> pd.Series:
     return ts - pd.to_timedelta(ms, unit="ms")
 
 
-def _extended_frame(rows: list[dict]) -> pd.DataFrame:
+def _find(path: Path, patterns: list[str]) -> list[Path]:
+    return sorted({f for pattern in patterns for f in path.rglob(pattern)})
+
+
+def _parse_ts(values: pd.Series) -> pd.Series:
+    """UTC timestamps; anything unparseable becomes NaT."""
+    return pd.to_datetime(values, utc=True, errors="coerce", format="mixed")
+
+
+def _drop_bad_ts(df: pd.DataFrame, ts: pd.Series, stats: dict) -> tuple[pd.DataFrame, pd.Series]:
+    bad = ts.isna()
+    stats["n_bad_ts"] = int(bad.sum())
+    if stats["n_bad_ts"]:
+        log.info("dropped %d rows with a missing or malformed timestamp", stats["n_bad_ts"])
+    return df[~bad], ts[~bad]
+
+
+def _extended_frame(rows: list[dict], stats: dict) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     for col in (
         "ts",
@@ -72,6 +92,8 @@ def _extended_frame(rows: list[dict]) -> pd.DataFrame:
         "offline",
         "incognito_mode",
         "ms_played",
+        "audiobook_uri",
+        "audiobook_title",
     ):
         if col not in df:
             df[col] = None
@@ -79,11 +101,13 @@ def _extended_frame(rows: list[dict]) -> pd.DataFrame:
         df["spotify_episode_uri"].isna()
         & df["master_metadata_track_name"].notna()
         & df["spotify_track_uri"].notna()
+        & df["audiobook_uri"].isna()
+        & df["audiobook_title"].isna()
         & ~df["incognito_mode"].fillna(False).astype(bool)
     )
     df = df[keep]
+    df, ts = _drop_bad_ts(df, _parse_ts(df["ts"]), stats)
     skipped = df["skipped"].fillna(False).astype(bool)
-    ts = pd.to_datetime(df["ts"], utc=True)
     return pd.DataFrame(
         {
             "ts": ts,
@@ -101,14 +125,24 @@ def _extended_frame(rows: list[dict]) -> pd.DataFrame:
     )
 
 
-def _account_frame(rows: list[dict]) -> pd.DataFrame:
+def _account_frame(rows: list[dict], stats: dict) -> pd.DataFrame:
     df = pd.DataFrame(rows)
-    for col in ("endTime", "artistName", "trackName", "msPlayed"):
+    for col in ("endTime", "artistName", "trackName", "msPlayed", "podcastName", "episodeName"):
         if col not in df:
             df[col] = None
-    df = df[df["trackName"].notna() & df["endTime"].notna()]
+    ms = pd.to_numeric(df["msPlayed"], errors="coerce")
+    # Older files mix podcasts in; a row with unknown ms has no label.
+    keep = (
+        df["trackName"].notna()
+        & df["artistName"].notna()
+        & df["podcastName"].isna()
+        & df["episodeName"].isna()
+        & ms.notna()
+    )
+    df, ms = df[keep], ms[keep]
+    df, ts = _drop_bad_ts(df, _parse_ts(df["endTime"]), stats)
+    ms = ms[df.index]
     na = pd.Series(pd.NA, index=df.index, dtype=object)
-    ts = pd.to_datetime(df["endTime"], utc=True)
     return pd.DataFrame(
         {
             "ts": ts,
@@ -121,7 +155,7 @@ def _account_frame(rows: list[dict]) -> pd.DataFrame:
             "shuffle": pd.Series(pd.NA, index=df.index, dtype="boolean"),
             "reason_start": na,
             "offline": pd.Series(pd.NA, index=df.index, dtype="boolean"),
-            "skip": pd.to_numeric(df["msPlayed"]) < ACCOUNT_SKIP_MS,
+            "skip": ms < ACCOUNT_SKIP_MS,
         }
     )
 
@@ -130,21 +164,27 @@ def load_export(path: Path) -> pd.DataFrame:
     """Load every music play from a Spotify export folder (searched recursively).
 
     Returns exactly ``DECISION_COLUMNS``, sorted by ``ts`` (stable), with a fresh
-    index. Podcasts, rows without track metadata and private-session plays are
-    dropped, as are duplicate ``(ts, item_id)`` rows from overlapping exports.
+    index. Podcasts, audiobooks, rows without track metadata, rows with an
+    unparseable timestamp and private-session plays are dropped, as are duplicate ``(ts, item_id)`` rows from overlapping exports.
     """
     path = Path(path)
-    extended = sorted(path.rglob("Streaming_History_Audio_*.json"))
-    account = sorted(path.rglob("StreamingHistory_music_*.json"))
+    extended = _find(path, EXTENDED_PATTERNS)
+    account = _find(path, ACCOUNT_PATTERNS)
     if not extended and not account:
-        raise ValueError("no Spotify streaming history files")
+        raise ValueError(
+            f"no Spotify streaming history files under {path} (looked for "
+            + ", ".join(EXTENDED_PATTERNS + ACCOUNT_PATTERNS)
+            + ")"
+        )
 
+    stats: dict = {}
     if extended:
-        df = _extended_frame(_read_rows(extended))
+        df = _extended_frame(_read_rows(extended), stats)
     else:
-        df = _account_frame(_read_rows(account))
+        df = _account_frame(_read_rows(account), stats)
 
     df = df[DECISION_COLUMNS].drop_duplicates(["ts", "item_id"], keep="first")
     df = df.sort_values("ts", kind="stable").reset_index(drop=True)
     df["skip"] = df["skip"].astype(bool)
+    df.attrs.update(stats)
     return df

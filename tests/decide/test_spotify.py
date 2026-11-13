@@ -203,3 +203,107 @@ def test_start_ts_account_format(tmp_path):
     )
     df = load_export(tmp_path)
     assert df.loc[0, "ts"] - df.loc[0, "start_ts"] == pd.Timedelta(minutes=3)
+
+
+def test_older_extended_name_endsong(tmp_path):
+    write(
+        tmp_path / "endsong_0.json",
+        [ext_row("2024-01-01T12:00:00Z", "spotify:track:a", reason_end="fwdbtn")],
+    )
+    df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["spotify:track:a"]
+    assert (df["source"] == "spotify_extended").all()
+    assert df["skip"].tolist() == [True]
+
+
+def test_older_account_name_drops_podcasts(tmp_path):
+    write(
+        tmp_path / "StreamingHistory0.json",
+        [
+            acc_row("2024-01-01 12:00", 29999, track="a"),
+            {"endTime": "2024-01-01 12:05", "podcastName": "Show", "episodeName": "Ep",
+             "msPlayed": 600000},
+            {"endTime": "2024-01-01 12:10", "trackName": "Song", "msPlayed": 200000},
+            {"endTime": "2024-01-01 12:15", "artistName": "Artist", "trackName": "Ep",
+             "episodeName": "Ep", "msPlayed": 200000},
+            acc_row("2024-01-01 12:20", 180000, track="b"),
+        ],
+    )
+    df = load_export(tmp_path)
+    assert (df["source"] == "spotify_account").all()
+    assert df["item_id"].tolist() == ["Artist|a", "Artist|b"]
+
+
+def test_no_files_error_lists_all_patterns(tmp_path):
+    with pytest.raises(ValueError) as e:
+        load_export(tmp_path)
+    for pattern in (
+        "Streaming_History_Audio_*.json",
+        "endsong_*.json",
+        "StreamingHistory_music_*.json",
+        "StreamingHistory[0-9]*.json",
+    ):
+        assert pattern in str(e.value)
+
+
+def test_malformed_timestamps_are_dropped_and_counted(tmp_path, caplog):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [
+            ext_row("2024-01-01T12:00:00Z", "spotify:track:a"),
+            ext_row("not a time", "spotify:track:b"),
+            ext_row(None, "spotify:track:c"),
+        ],
+    )
+    with caplog.at_level("INFO"):
+        df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["spotify:track:a"]
+    assert df["ts"].notna().all()
+    assert df.attrs["n_bad_ts"] == 2
+    assert "2 rows" in caplog.text
+
+
+def test_malformed_timestamps_account(tmp_path):
+    write(
+        tmp_path / "StreamingHistory_music_0.json",
+        [acc_row("2024-01-01 12:00", track="a"), acc_row("garbage", track="b")],
+    )
+    df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["Artist|a"]
+    assert df.attrs["n_bad_ts"] == 1
+
+
+def test_account_row_with_unknown_ms_is_dropped(tmp_path):
+    write(
+        tmp_path / "StreamingHistory_music_0.json",
+        [
+            acc_row("2024-01-01 12:00", ms=180000, track="a"),
+            acc_row("2024-01-01 12:01", ms="oops", track="b"),
+            acc_row("2024-01-01 12:02", ms=None, track="c"),
+        ],
+    )
+    df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["Artist|a"]
+
+
+def test_extended_non_numeric_ms_keeps_row_with_start_at_ts(tmp_path):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [ext_row("2024-01-01T12:00:00Z", "spotify:track:a", ms_played="oops")],
+    )
+    df = load_export(tmp_path)
+    assert len(df) == 1
+    assert df.loc[0, "start_ts"] == df.loc[0, "ts"]
+
+
+def test_audiobook_rows_are_dropped(tmp_path):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [
+            ext_row("2024-01-01T12:00:00Z", "spotify:track:a"),
+            ext_row("2024-01-01T12:10:00Z", "spotify:track:b", audiobook_uri="spotify:show:x"),
+            ext_row("2024-01-01T12:20:00Z", "spotify:track:c", audiobook_title="A Book"),
+        ],
+    )
+    df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["spotify:track:a"]
