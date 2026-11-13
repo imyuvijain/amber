@@ -1,156 +1,89 @@
 # Amber
 
-A personal decision engine, trained on your own data exports.
+A personal decision engine. It learns to predict the choices a person makes (skip this song, go back to this creator, "see more" or "not interested") from the data exports that Spotify, Google and Instagram are required to give them.
 
-The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. The aim: a model you own that eventually sees more than any single platform does. Nothing is asked of you except the files you already have the right to download.
+No quizzes, no surveys and no API keys. The only input is the person's own data.
 
-## Status
+## How it works
 
-- **v0 (Amber): closed, negative result.** See below.
-- **v1: Spotify skips, built and tested on fake data.** The real run is pending the owner's export. There is no real-person result yet.
-- **v2 sources: Google Takeout and Instagram, ingested from the owner's real exports** (about 69,000 events since 2020), with a life timeline for context and two visual explorations. Exploratory signal is strong (below); the frozen prediction tasks are next.
-- **Next:** freeze and score the first v2 tasks (Instagram creator return, YouTube channel return), the Spotify real run, friends' exports, then a "veto, not quiz" screen once predictions are good enough to act on.
+```mermaid
+flowchart LR
+  A[Spotify export] --> L[Loaders]
+  B[Google Takeout<br/>YouTube, Search] --> L
+  C[Instagram export] --> L
+  L --> E[Event log]
+  T[Life timeline<br/>homes, trips, exams] --> X[Context features]
+  E --> X
+  X --> M[Model ladder<br/>base rate → context → memory → recency]
+  M --> R[Prequential evaluation<br/>with bootstrap CIs]
+```
 
-## v0 (Amber): a quiz that lost
+- **Loaders** parse exports from three platforms into one event log: Spotify (extended and account history), Google Takeout (HTML and JSON) and Instagram (three JSON layouts). Files are read from an allow-list, so messages, media, contacts and AI-chat logs are never opened.
+- **Context** places every event in the person's real local time. Time zones come from a home timeline plus trips detected from country-specific Google Maps domains. Each event also gets a life phase and the distance to the next exam window.
+- **Models** form a ladder. Each rung adds one kind of knowledge, so the gain between rungs measures what that knowledge is worth. The learner is online logistic regression written in numpy, with streaming standardization.
+- **Evaluation** is prequential: each decision is predicted from strictly earlier data, then learned from. The last 20% of the timeline is held out, and 95% confidence intervals come from a block bootstrap by calendar day.
 
-Amber tested whether art taste predicts clothing picks: four "yous" (stated, Big Five, art, and one learned from clothing picks) in one CLIP vector space, each predicting 40 random this-or-that clothing pairs. The owner played the real run on 2026-11-13.
+## Results
 
-- The art you scored **52.5%** over 40 pairs (95% CI 37.5 to 67.5). That is a coin flip.
-- The you that learns from the owner's own clothing picks scored 66.25% (CI 52.5 to 80).
-- The yous pointed in unrelated directions (all cosines within 0.06 of zero). Art's readout said "animal print, grunge, tie-dye"; the owner picked business, formal, elegant.
-- The owner's verdict: "low quality photos, way too long onboarding, the choices were bs ... quizzing the user is a very big waste of time."
+**Spotify skip prediction on synthetic users** (5,000 plays, about 970 held out; holdout log loss, lower is better):
 
-So v1 has no quiz. Full numbers and the caveats: [docs/results/first-run.md](docs/results/first-run.md). The v0 code (`amber ingest`, `embed`, `serve`, the web app) is still in the repo, frozen as it ran. Its design notes and research are in [NOTES.md](NOTES.md) and [PLAN.md](PLAN.md).
-
-## v1: predict your own Spotify skips
-
-For every play in your history, predict whether you skip it, using only plays that happened earlier. Models are scored prequentially (predict, record, then learn) on the last 20% of your timeline.
-
-The ladder. Each rung adds one kind of knowledge, so the gaps between rungs are the result:
-
-| Rung | Knows |
-|---|---|
-| base rate | your running skip rate |
-| context | when and how you listen (hour, weekday, platform, shuffle, how the play started, position in session, the gap before the previous play, whether that one was skipped) |
-| memory | context plus your past skip rate for this artist and track, and play counts |
-| recency | memory with exponentially decayed counts |
-
-Label rule (frozen with git tag `decide-v1` before any real data): extended format, skip = `reason_end == "fwdbtn"` or `skipped` is true; account format, skip = played under 30 seconds. Metrics are log loss (primary), Brier, AUC and accuracy, always next to the base-rate baseline. 95% CIs come from a block bootstrap by calendar day.
-
-### Results so far: fake users only
-
-These are synthetic sanity checks, not a result about any real person. 5,000 fake plays generated, about 4,850 left after the loader drops podcasts, private-session plays and a few near-duplicates, about 971 held out. Holdout log loss, lower is better (reproduce with `amber decide fake <folder> --kind personal --n-plays 5000`, or `--kind null`):
-
-| User | base | context | memory | recency |
+| User | Base rate | + Context | + Memory | + Recency |
 |---|---|---|---|---|
-| personal (planted skip structure) | 0.670 | 0.650 | 0.562 | 0.526 |
-| null (skips are random) | 0.602 | 0.602 | 0.601 | 0.602 |
+| With real habits | 0.670 | 0.650 | 0.562 | **0.526** |
+| Skips at random (control) | 0.602 | 0.602 | 0.601 | 0.602 |
 
-Holdout accuracy: the personal user goes from 61.0% (base rate) to 73.9% (recency); every rung on the null user is 71.1%, the base rate.
+On the user with real habits, accuracy rises from 61% to 74%, and memory beats context by 0.088 log loss (95% CI 0.068 to 0.109). On the random user no rung beats the base rate, which is the point of the control. It caught two leaks during development, both fixed:
+- Spotify timestamps a play when it ends, so a "time since the last play" feature contained the play's own length (the random user scored AUC 0.957).
+- Spotify's listening time excludes pauses.
 
-On the personal user, memory beats context by 0.088 log loss (95% CI 0.068 to 0.109). On the null user every gap's CI contains 0, as it should.
+**First look at real data** (one person, about 69,000 events from 2020 to 2026). A single count from earlier activity already ranks the next decision well:
 
-**Two leaks the null user caught during the build, both fixed before the freeze.** Spotify's `ts` is the play's end time, so a "gap since last play" feature secretly encoded the play's own duration; the null user, who has no signal, scored AUC 0.957 before the fix in commit 9f84dfe ("decisions happen at play start"). Fix: decisions are timestamped at play start (`ts` minus `ms_played`). Then `ms_played` turned out to exclude pauses, so the current play's gap is replaced by the gap before the previous play. A null control that fails loudly is useful evidence the evaluation catches leaks. The real run is pending.
+| Decision | Base rate | AUC |
+|---|---|---|
+| Like the same Instagram creator again within 7 days | 24% | 0.90 |
+| Watch the same YouTube channel again within 7 days | 34% | 0.82 |
+| Reels feedback: "see more" vs "not interested" | 89% | 0.73 |
 
-### Run it
+These are exploratory: scored on all the data at once, not yet on the held-out protocol.
 
-Needs [uv](https://docs.astral.sh/uv/).
+**Earlier experiment.** The first version of Amber tried to learn taste through a this-or-that quiz in a CLIP embedding space (art preferences predicting clothing picks). On a real run it scored 52.5%, no better than a coin flip, while a model of the person's own past picks reached 66%. That result is why the project switched from asking people questions to learning from decisions they had already made. Write-up: [docs/results/first-run.md](docs/results/first-run.md).
+
+## Quickstart
 
 ```bash
 uv sync
-# try it on a fake export (kept out of the real export folder)
-uv run amber decide fake data/exports/fake --kind personal --n-plays 5000   # or --kind null, --fmt account
-uv run amber decide ingest data/exports/fake
+
+# synthetic data
+uv run amber decide fake data/exports/fake --kind personal   # or --kind null
 uv run amber decide eval data/exports/fake
 
-# the real thing, from data/exports/spotify/ (see below)
-uv run amber decide ingest
-uv run amber decide eval --tz <Area/City>                      # your timezone; add --publish for the aggregates-only report
+# your own exports, in data/exports/{spotify,google,meta}/
+uv run amber decide eval --tz America/Toronto    # Spotify skip ladder
+uv run amber decide sources                      # Google + Instagram event log, prints counts only
 ```
 
-`ingest` and `eval` write to `data/decide/`, so a fake run and a real run overwrite the same private files. `eval` writes the full private report there. With `--publish` it also copies an aggregates-only report to `docs/results/`; `--publish` refuses (non-zero exit, nothing written) when the run used synthetic data.
+`data/` is git-ignored. Raw exports and private reports stay on your machine. Published reports contain aggregates only, and publishing refuses to run on synthetic data.
 
-The loader also drops near-duplicate plays (the same track again within 60 s of its earlier play, which usually means a re-logged copy) and counts plays that start more than 5 s before the previous play ended (overlap, kept, e.g. two devices). `ingest`, `eval` and both reports print both counts. The headline says "beats" only if memory beats context and also beats the base rate, each with a 95% CI above zero; it always shows the memory-versus-base gain too.
+## Code
 
-### What export to request
+```
+src/amber/decide/
+  spotify.py         Spotify loader: both formats, play-start timestamps, dedup
+  google_html.py     Google Takeout HTML parser (regex, linear time)
+  google_takeout.py  Takeout JSON and the shared URL classifier
+  instagram.py       Instagram loader: three layouts, explicit feedback
+  life.py            home and trip time zones, life phases, exam windows
+  features.py        leak-free context, memory and decayed-memory features
+  model.py           online logistic regression and the model ladder
+  metrics.py         log loss, Brier, AUC, calibration, day-block bootstrap
+  pipeline.py        export in, reports out
+src/amber/           the earlier quiz app: CLIP space, preference models, FastAPI
+web/                 its React front end
+tests/               736 tests (pytest)
+```
 
-1. Go to [spotify.com/account/privacy](https://www.spotify.com/account/privacy).
-2. Request **Extended streaming history** (it can take up to 30 days). Optionally also request **Account data** (about 5 days); it is coarser and is ignored when the extended files are present.
-3. Put the files in `data/exports/spotify/`. Older names work too: `endsong_*.json` (extended) and `StreamingHistory[0-9]*.json` (account; podcast rows are dropped).
-
-### Privacy
-
-- `ip_addr` and `conn_country` are dropped at ingest and never stored.
-- Podcasts, audiobooks, rows with no track and incognito plays are dropped.
-- `data/` is git-ignored: raw exports and private reports never leave your machine.
-- Committed reports carry no track, artist or album names and no IDs.
-- No LLM, no paid API, no Spotify Web API, and no downloads beyond your own export.
-
-## v2: Google, YouTube and Instagram
-
-v1 needs one platform. Real decisions are spread across many, so v2 reads more exports into one event log, adds the person's life context, and looks for decisions worth predicting.
+**Stack:** Python 3.12, numpy, pandas, PyTorch with open_clip, FastAPI, React and TypeScript, Typer, pytest, ruff, uv.
 
 ```bash
-uv run amber decide fake-sources data/exports/fake      # made-up google/ and instagram/ folders (--fmt json for JSON)
-uv run amber decide sources data/exports/fake           # audit
-uv run amber decide sources                             # the real thing: reads data/exports/
+uv run pytest -q && uv run ruff check .
 ```
-
-### Loaders
-
-- **Where to put the files:** Google Takeout in `data/exports/google/`, Instagram (Meta) in `data/exports/meta/` (or `instagram/`). Files are found by name, so folder names don't matter. Google: `MyActivity`, `watch-history`, `search-history`, in HTML (the Takeout default) or JSON. Instagram: three layouts, including the 2026 `label_values` one with nested Owner and Media sections.
-- **Output:** one event log (`ts`, `source`, `kind`, `item_id`, `creator_id`, `text`, `url`, `from_ads`) in `data/decide/events.parquet`. The audit prints counts, date ranges and active months per source and kind, never a title, query, URL or username.
-- **Kinds:** Google `search`, `visit`, `discover`, `activity`; YouTube `watch`, `like`; Instagram `like`, `like_comment`, `save`, `comment`, `story_interaction`, `follow`, `ig_search`, `link_open`, `view_post`, `view_video`, `view_story`, `ad_view`, `ad_click`, and explicit feedback: `see_more`, `not_interested`, `not_interested_profile`.
-- **Allow-listed paths only:** Search, YouTube, Discover, Maps, Shopping and a few other My Activity products; a fixed list of Instagram activity files. Gemini and Meta AI chats, messages, media and contacts are never opened.
-- **HTML dates** end in a timezone abbreviation and are read literally as fixed UTC offsets (EST −5, EDT −4, CST −6, CDT −5, MST −7, MDT −6, PST −8, PDT −7, UTC/GMT 0, IST +5:30 India, JST +9, CET +1, CEST +2, BST +1). Takeout prints one label all year ("EST" even in July), so reading it as New York time would shift summer rows by an hour.
-
-### Life context (`amber.decide.life`)
-
-Behavior depends on where you are and what season of life you're in. A small private YAML file (`data/profile/life.yaml`, git-ignored) lists homes with move dates, life phases, exam windows and birth year. `annotate(events, timeline)` adds to every event:
-
-- `country` and `tz`: home by date, overridden on days a country-specific Google Maps domain (`google.co.jp`, `google.co.in`, ...) shows you abroad, with gaps of up to 7 days between two sightings of the same country filled. `google.com` is not evidence of location.
-- `local_hour`, `local_weekday`, `local_date`: in the time zone you were actually in.
-- `age`, `phase`, `in_exam`, `days_to_exam` (capped at 60).
-
-These are candidate features for the v2 ladder, alongside recency weighting so that what you did years ago counts less than what you do now. Like every rung, they must earn their place with a CI above zero.
-
-### Visuals
-
-Two local explorations, built from the event log (scripts not yet in the package):
-
-- **Activity page:** a day-by-day barcode with a location ribbon, a 24-hour clock in true local time, weekday-by-hour heatmaps, binge sessions, channel and creator concentration, monthly volume, exam-season and late-night comparisons, and the categories Meta uses to target ads. Counts and rates only.
-- **Taste map:** every video title, search and caption embedded with the same CLIP text model as v0 (no new download), clustered (k-means, k = 36) and laid out with t-SNE, with labels from each cluster's most distinctive words and a monthly path showing how attention moves. It shows real titles, so it stays on the owner's machine.
-
-### First look: decisions in the owner's data (exploratory)
-
-Before any model, a single count from strictly earlier activity (how often you had already liked that creator or watched that channel) already ranks the next decision well. AUC is scored on all the data at once, not the frozen held-out protocol, so treat these as reasons to build the tasks, not results:
-
-| Decision | Base rate | Decisions | AUC of one prior count |
-|---|---|---|---|
-| Like the same Instagram creator again within 7 days | 24% | 9,736 | 0.90 |
-| Watch the same YouTube channel again within 7 days | 34% | 14,386 | 0.82 |
-| Explicit Reels feedback: "see more" vs "not interested" | 89% see more | 1,904 | 0.73 |
-
-Instagram only exports about a month of posts, videos and stories *viewed*, too short for a "liked it, given it was seen" task, so those three come first. Searches followed by a click within two minutes (29% of searches) are a fourth candidate.
-
-## Caveats
-
-- **n = 1.** Every real result so far is one person. Friends' exports come next, comparing your own profile, someone else's profile and a pooled one.
-- **Skip is not dislike.** People skip because they are busy, in the wrong mood, or have heard it too often. v1 predicts the behavior, not the opinion.
-- **Beating the base rate is the bar.** A skip rate of 30% means "never skip" is already 70% accurate, which is why every metric is shown next to it.
-- Amber v0's own reporting had known problems (retest "ceiling" is really retest agreement, bootstrap CIs degenerate at tiny n); see [first-run.md](docs/results/first-run.md).
-
-## Tests
-
-```bash
-uv run pytest -q
-uv run ruff check .
-```
-
-## Credits
-
-- **Vector space (v0, and the v2 taste map):** [open_clip](https://github.com/mlfoundations/open_clip), ViT-B-32 laion2b.
-- **Clothes (v0):** Hugging Face dataset `benitomartin/fashion-product-images-small-384x512`, streamed and stored as small thumbnails. Its license is unstated on Hugging Face; it originates from Kaggle's *Fashion Product Images*.
-- **Art (v0):** 2,000 public-domain (CC0) works from the [Art Institute of Chicago API](https://api.artic.edu/docs/).
-- **Research behind v0:** Vessel et al. 2018 (taste in art is individual), the XPASS-Vis preprint (cross-domain transfer), Palmer and Griscom (harmony), Chamorro-Premuzic et al. (openness and art taste). Links are in [NOTES.md](NOTES.md).
-- **Stack:** Python 3.12 with uv, PyTorch, numpy, pandas, pyarrow, scipy, PyYAML, Typer, FastAPI, SQLite, pytest, ruff.
