@@ -1,97 +1,99 @@
 # Amber
 
-> A tool that knows you better than you know yourself.
+A personal decision engine, trained on your own data exports.
 
-**Status: work in progress.** This is a rough first draft. The vector space is built; the playable app, the personality yous and the real results are not. Nothing here is a result yet.
-
-## The idea
-
-What people *say* they like and what they *pick* are often different. Amber tests that. It builds five versions of you, four of which never see a single clothing choice of yours, and then makes them compete to predict which clothes you'll choose.
-
-- **Stated preference:** you describe your style in your own words.
-- **Revealed preference:** you answer 40 this-or-that clothing pairs and the model learns from your picks.
-- **The showdown:** 20 more random clothing pairs. Before each one, every you predicts your pick, and the prediction is saved before your answer is accepted. Scores are compared against a coin flip (50%) and against your own retest a week later, since nobody agrees with themselves 100% of the time.
-
-The core question: can a model that never saw anyone's shopping choices predict yours, just from who you are?
-
-## The five yous
-
-| You | Built from | Sees clothing choices? |
-|---|---|---|
-| `stated` | your own words describing your style | no |
-| `bigfive` | 50-question IPIP personality test, bridged to clothes through fixed text prompts | no |
-| `art` | this-or-that on paintings and photographs, learned in art space, carried over to clothes | no |
-| `values` | open answers about how you live, condensed to personality adjectives by an LLM (no clothing words allowed) | no |
-| `revealed` | 40 this-or-that clothing choices | yes, training phase only |
-
-## How it works
-
-- **One shared vector space.** A pretrained CLIP model (`open_clip`, ViT-B-32 laion2b) embeds clothing photos, artworks and free text into the same space. No model is trained on consumer preference data. (The model has seen product photos online, so the fair claim is "no consumer preference data", not "never saw a product".)
-- **Centering.** Each domain's mean vector is subtracted from its items and the result re-normalized. This removes "clothing-ness" and "art-ness", so a taste learned on art can point somewhere meaningful among clothes.
-- **PCA to 32 dimensions.** Each domain gets a PCA basis fit on its centered vectors. Preferences are learned in 32 dimensions, which is what makes 30-40 choices enough.
-- **Bayesian preference model.** An online probit model updates after every this-or-that answer. Active pair selection picks the next pair that should teach it the most, skipping near-identical photos.
-- **Every you is a direction.** Each you is a unit vector in the space and predicts a pair by which item scores higher along it.
-- **Showdown rules.**
-  - Pairs are random, not chosen by a model.
-  - Every prediction is saved before the answer is accepted.
-  - All yous are frozen when the showdown starts.
-  - Showdown and retest choices never train anything.
-  - The `stated`, `bigfive`, `art` and `values` builders raise an error if handed clothing choices.
-
-## Data
-
-No big download is needed. Everything under `data/` is capped at about 1 GB.
-
-- **Clothes:** about 41,800 products streamed from the Hugging Face dataset `benitomartin/fashion-product-images-small-384x512` and stored as small thumbnails (216x288). The streamed catalog is never downloaded whole. (Its license is unstated on Hugging Face; it originates from Kaggle's *Fashion Product Images*.)
-- **Art:** 2,000 public-domain (CC0) paintings, photos and prints from the Art Institute of Chicago API, fetched politely at 1 request per second.
-- **On disk today:** about 512 MB for `data/`, including the embeddings (see [docs/results/space.md](docs/results/space.md)).
-
-## Tech stack
-
-- Python 3.12 via `uv`
-- PyTorch (Apple GPU via MPS, CPU fallback) and `open_clip_torch`
-- Hugging Face `datasets` (streaming), numpy, pandas, pyarrow, scipy, pillow
-- Typer (CLI), httpx
-- SQLite (stdlib) for the store
-- pytest and ruff
-- Planned: FastAPI backend and a Vite + React + TypeScript frontend; optional LLM API for the `values` you only
+The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. A model you own can eventually see more than any single platform does. Nothing is asked of you except the files you already have the right to download.
 
 ## Status
 
-Tracked in [PLAN.md](PLAN.md) (20 tasks in 7 phases).
+- **v0 (Amber): closed, negative result.** See below.
+- **v1: Spotify skips, built and tested on fake data.** The real run is pending the owner's export. There is no real-person result yet.
+- **Next:** friends' exports, YouTube Takeout (v2), then a "veto, not quiz" screen once predictions are good enough to act on.
 
-- [x] **Phase 1: The vector space** (tasks 1-5): ingest clothes and art, encoder, vector index, PCA basis, embeddings, text search
-- [ ] **Phase 2: Revealed you** (tasks 6-8): the Bayesian preference model and the SQLite store are built; active pair selection and the simulated-person benchmark are in progress
-- [ ] **Phase 3: First playable** (tasks 9-12): API and web app for describe, this-or-that, showdown, scoreboard
-- [ ] **Phase 4: Personality yous** (tasks 13-15): art, Big Five and values yous
-- [ ] **Phase 5: Results** (tasks 16-18): readout, map of your yous, retest a week later
-- [ ] **Phase 6: Search** (task 19): generic vs. for-you search results
-- [ ] **Phase 7: Ship** (task 20): real results, demo, final README
+## v0 (Amber): a quiz that lost
 
-## Setup (what works today)
+Amber tested whether art taste predicts clothing picks: four "yous" (stated, Big Five, art, and one learned from clothing picks) in one CLIP vector space, each predicting 40 random this-or-that clothing pairs. The owner played the real run on 2026-11-13.
+
+- The art you scored **52.5%** over 40 pairs (95% CI 37.5 to 67.5). That is a coin flip.
+- The you that learns from the owner's own clothing picks scored 66.25% (CI 52.5 to 80).
+- The yous pointed in unrelated directions (all cosines within 0.06 of zero). Art's readout said "animal print, grunge, tie-dye"; the owner picked business, formal, elegant.
+- The owner's verdict: "low quality photos, way too long onboarding, the choices were bs ... quizzing the user is a very big waste of time."
+
+So v1 has no quiz. Full numbers and the caveats: [docs/results/first-run.md](docs/results/first-run.md). The v0 code (`amber ingest`, `embed`, `serve`, the web app) is still in the repo, frozen as it ran. Its design notes and research are in [NOTES.md](NOTES.md) and [PLAN.md](PLAN.md).
+
+## v1: predict your own Spotify skips
+
+For every play in your history, predict whether you skip it, using only plays that happened earlier. Models are scored prequentially (predict, record, then learn) on the last 20% of your timeline.
+
+The ladder. Each rung adds one kind of knowledge, so the gaps between rungs are the result:
+
+| Rung | Knows |
+|---|---|
+| base rate | your running skip rate |
+| context | when and how you listen (hour, weekday, platform, shuffle, how the play started, position in session, gap since the previous play, whether that one was skipped) |
+| memory | context plus your past skip rate for this artist and track, and play counts |
+| recency | memory with exponentially decayed counts |
+
+Label rule (frozen with git tag `decide-v1` before any real data): extended format, skip = `reason_end == "fwdbtn"` or `skipped` is true; account format, skip = played under 30 seconds. Metrics are log loss (primary), Brier, AUC and accuracy, always next to the base-rate baseline. 95% CIs come from a block bootstrap by calendar day.
+
+### Results so far: fake users only
+
+These are synthetic sanity checks, not a result about any real person. 5,000 fake plays, about 972 held out. Holdout log loss, lower is better:
+
+| User | base | context | memory | recency |
+|---|---|---|---|---|
+| personal (planted skip structure) | 0.670 | 0.650 | 0.562 | 0.527 |
+| null (skips are random) | 0.602 | 0.602 | 0.601 | 0.602 |
+
+On the personal user, memory beats context by 0.088 log loss (95% CI 0.067 to 0.109). On the null user every gap's CI contains 0, as it should.
+
+**Two leaks the null user caught during the build, both fixed before the freeze.** Spotify's `ts` is the play's end time, so a "gap since last play" feature secretly encoded the play's own duration; the null user, who has no signal, scored AUC 0.957. Fix: decisions are timestamped at play start (`ts` minus `ms_played`). Then `ms_played` turned out to exclude pauses, so the current play's gap is replaced by the gap before the previous play. A null control that fails loudly is the best evidence the evaluation is real. The real run is pending.
+
+### Run it
 
 Needs [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
-uv run pytest
+uv run amber decide fake data/exports/spotify --kind personal   # or --kind null, --fmt account, --n-plays N
+uv run amber decide ingest                                      # parse the export into data/decide/decisions.parquet
+uv run amber decide eval --tz Asia/Kolkata                      # your timezone; add --publish for the aggregates-only report
 ```
 
-Build the data and the space:
+`eval` writes the full private report to `data/decide/`. With `--publish` it also copies an aggregates-only report to `docs/results/`.
+
+### What export to request
+
+1. Go to [spotify.com/account/privacy](https://www.spotify.com/account/privacy).
+2. Request **Extended streaming history** (it can take up to 30 days). Optionally also request **Account data** (about 5 days); it is coarser and is ignored when the extended files are present.
+3. Put the files in `data/exports/spotify/`.
+
+### Privacy
+
+- `ip_addr` and `conn_country` are dropped at ingest and never stored.
+- Podcasts, audiobooks, rows with no track and incognito plays are dropped.
+- `data/` is git-ignored: raw exports and private reports never leave your machine.
+- Committed reports carry no track, artist or album names and no IDs.
+- No LLM, no paid API, no Spotify Web API, and no downloads beyond your own export.
+
+## Caveats
+
+- **n = 1.** The first real result will be one person. Friends' exports come next, comparing your own profile, someone else's profile and a pooled one.
+- **Skip is not dislike.** People skip because they are busy, in the wrong mood, or have heard it too often. v1 predicts the behavior, not the opinion.
+- **Beating the base rate is the bar.** A skip rate of 30% means "never skip" is already 70% accurate, which is why every metric is shown next to it.
+- Amber v0's own reporting had known problems (retest "ceiling" is really retest agreement, bootstrap CIs degenerate at tiny n); see [first-run.md](docs/results/first-run.md).
+
+## Tests
 
 ```bash
-uv run amber ingest clothes          # stream the catalog and save thumbnails (--limit N for a quick trial)
-uv run amber ingest art              # fetch public-domain artworks from the AIC API
-uv run amber shrink-thumbs           # optional: shrink clothing thumbnails in place to save disk
-uv run amber embed                   # embed everything and fit the PCA bases
-uv run amber eval-space              # measure retrieval quality (P@20)
+uv run pytest -q
+uv run ruff check .
 ```
 
-Try it:
+## Credits
 
-```bash
-uv run amber search-text "red floral dress"
-uv run amber search-text "a stormy seascape" --domain art
-```
-
-There is no web app yet.
+- **Vector space (v0):** [open_clip](https://github.com/mlfoundations/open_clip), ViT-B-32 laion2b.
+- **Clothes (v0):** Hugging Face dataset `benitomartin/fashion-product-images-small-384x512`, streamed and stored as small thumbnails. Its license is unstated on Hugging Face; it originates from Kaggle's *Fashion Product Images*.
+- **Art (v0):** 2,000 public-domain (CC0) works from the [Art Institute of Chicago API](https://api.artic.edu/docs/).
+- **Research behind v0:** Vessel et al. 2018 (taste in art is individual), the XPASS-Vis preprint (cross-domain transfer), Palmer and Griscom (harmony), Chamorro-Premuzic et al. (openness and art taste). Links are in [NOTES.md](NOTES.md).
+- **Stack:** Python 3.12 with uv, PyTorch, numpy, pandas, pyarrow, scipy, Typer, FastAPI, SQLite, pytest, ruff.
