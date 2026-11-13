@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import pandas as pd
 
 PLATFORMS = ["android", "ios", "windows", "web_player"]
 N_ARTISTS = 40
@@ -35,6 +36,15 @@ SESSION_GAP_S = 2 * 3600
 SKIP_MS = 30_000  # a skip is shorter than this
 CHUNK = 3000  # rows per file
 COUNTRIES = ["DE", "US", "GB", "FR"]
+# What the generator's item ids look like once loaded: the track uri (extended) or
+# "artist|track" (account). Real Spotify uris are 22 base-62 characters, so they
+# never match.
+_SYNTHETIC_ITEM = r"^(spotify:track:fake\d{2}x\d{2}|Fake Artist \d{2}\|Fake Track \d{2}-\d{2})$"
+
+
+def is_synthetic(plays: pd.DataFrame) -> bool:
+    """True if any play in a loaded export came from this generator."""
+    return bool(plays["item_id"].astype(str).str.match(_SYNTHETIC_ITEM).any())
 
 
 def _catalog(rng: np.random.Generator) -> list[list[dict]]:

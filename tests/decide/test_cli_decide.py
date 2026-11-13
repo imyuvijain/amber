@@ -42,7 +42,21 @@ def test_cli_fake_ingest_eval(data_dir):
     assert (data_dir / "decide" / "report.md").exists()
 
 
-def test_eval_publish_copies_public_report(data_dir, monkeypatch):
+def test_eval_publish_copies_public_report(data_dir, monkeypatch, realish):
+    target = data_dir / "published" / "spotify-v1.md"
+    monkeypatch.setattr(cli, "PUBLIC_RESULTS_PATH", target)
+    runner = CliRunner()
+    fake = data_dir / "fake"
+    assert runner.invoke(
+        app, ["decide", "fake", str(fake), "--kind", "null", "--n-plays", "800"]
+    ).exit_code == 0
+    export = realish(fake, data_dir / "exports" / "spotify")
+    r = runner.invoke(app, ["decide", "eval", str(export), "--publish"])
+    assert r.exit_code == 0, r.output
+    assert target.read_text() == (data_dir / "decide" / "public.md").read_text()
+
+
+def test_eval_publish_refuses_synthetic_data(data_dir, monkeypatch):
     target = data_dir / "published" / "spotify-v1.md"
     monkeypatch.setattr(cli, "PUBLIC_RESULTS_PATH", target)
     runner = CliRunner()
@@ -51,8 +65,23 @@ def test_eval_publish_copies_public_report(data_dir, monkeypatch):
         app, ["decide", "fake", str(export), "--kind", "null", "--n-plays", "800"]
     ).exit_code == 0
     r = runner.invoke(app, ["decide", "eval", "--publish"])
-    assert r.exit_code == 0, r.output
-    assert target.read_text() == (data_dir / "decide" / "public.md").read_text()
+    assert r.exit_code != 0
+    assert "synthetic" in r.output
+    assert not target.exists() and not target.parent.exists()
+    # without --publish the same run is fine
+    assert runner.invoke(app, ["decide", "eval"]).exit_code == 0
+
+
+def test_ingest_and_eval_print_duplicate_and_overlap_counts(data_dir):
+    runner = CliRunner()
+    export = data_dir / "exports" / "spotify"
+    assert runner.invoke(
+        app, ["decide", "fake", str(export), "--kind", "null", "--n-plays", "800"]
+    ).exit_code == 0
+    for cmd in ("ingest", "eval"):
+        r = runner.invoke(app, ["decide", cmd])
+        assert r.exit_code == 0, r.output
+        assert "near-duplicate" in r.output and "overlap" in r.output
 
 
 def test_fake_account_format(data_dir):

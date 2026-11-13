@@ -172,6 +172,8 @@ def evaluate(
                 "ci": boot.ci(diff),
             }
         )
+    mvb_diff = losses["base"] - losses["memory"]
+    memory_vs_base = {"ll_gain": float(mvb_diff.mean()), "ci": boot.ci(mvb_diff)}
     frozen_loss = _row_log_loss(y, frozen_p)
     drift_diff = frozen_loss - losses["memory"]
     drift = {
@@ -187,6 +189,7 @@ def evaluate(
         "base_rate_holdout": float(y.mean()),
         "rungs": rungs,
         "gaps": gaps,
+        "memory_vs_base": memory_vs_base,
         "drift": drift,
         "calibration": calibration_table(y, cols[best]),
     }

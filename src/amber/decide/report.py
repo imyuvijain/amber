@@ -15,6 +15,13 @@ LIMITATIONS = (
     "Spotify's ms_played excludes pauses, so the session boundary and time of day "
     "for a play can be shifted by that play's own pause time."
 )
+LABEL_RULES = {
+    "spotify_extended": (
+        "a play counts as a skip when it ended with the forward button or Spotify "
+        "marked it skipped"
+    ),
+    "spotify_account": "a play counts as a skip when it lasted under 30 seconds",
+}
 RUNG_NOTES = {
     "base": "running skip rate, nothing else",
     "context": "hour, weekday, platform, shuffle, how the play started, session position",
@@ -44,16 +51,39 @@ def period(df: pd.DataFrame, tz: str = "UTC") -> tuple[str, str]:
 
 
 def headline(result: dict) -> str:
-    """The one-sentence verdict: does remembering you beat context alone?"""
+    """The one-sentence verdict: does remembering you beat context alone?
+
+    "beats" needs both the context-to-memory gain and the memory-versus-base gain
+    to have a 95% CI lower bound above zero.
+    """
     gap = _gap(result, "context", "memory")
     lo, hi = gap["ci"]
-    verb = "beats" if lo > 0 else "does not beat"
+    mvb = result["memory_vs_base"]
+    wins = lo > 0 and mvb["ci"][0] > 0
+    verb = "beats" if wins else "does not beat"
     return (
         f"Remembering you {verb} context-only listening habits: log-loss gain "
         f"{_num(gap['ll_gain'])} (95% CI {_num(lo)} to {_num(hi)}) on "
         f"{result['n_holdout']} held-out plays, base skip rate "
-        f"{_num(result['base_rate_holdout'], '.0%')}."
+        f"{_num(result['base_rate_holdout'], '.0%')}; memory versus base-rate-only "
+        f"gain {_num(mvb['ll_gain'])} (95% CI {_ci(mvb['ci'])})."
     )
+
+
+def counts_line(result: dict) -> str:
+    """Aggregate counts of the two timing oddities the loader found."""
+    return (
+        f"{result.get('n_near_duplicates', 0)} near-duplicate plays dropped (same "
+        f"item again within 60 s); {result.get('n_overlap', 0)} plays overlap the "
+        "previous play by more than 5 s (kept)."
+    )
+
+
+def source_line(result: dict) -> str:
+    source = result.get("source", "unknown")
+    rule = LABEL_RULES.get(source, "see the project README")
+    synthetic = " Synthetic data, not a real person." if result.get("synthetic") else ""
+    return f"Source: {source}; {rule}.{synthetic}"
 
 
 def _table(header: list[str], rows: list[list[str]]) -> list[str]:
@@ -69,11 +99,14 @@ def render_public(result: dict, period: tuple[str, str]) -> str:
         "",
         headline(result),
         "",
+        source_line(result),
+        "",
         (
             f"Plays from {period[0]} to {period[1]}: {result['n_total']} in all, "
             f"the last {result['n_holdout']} held out. Every prediction uses only "
             "strictly earlier plays. Gains are log-loss differences (positive means "
-            "the higher rung is better) with day-block bootstrap 95% CIs."
+            "the higher rung is better) with day-block bootstrap 95% CIs. "
+            + counts_line(result)
         ),
         "",
         "## Ladder on held-out plays",

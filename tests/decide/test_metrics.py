@@ -131,3 +131,14 @@ def test_evaluate_speed_large_holdout():
     t0 = time.time()
     evaluate(preds, skip, days, frozen, start=start)
     assert time.time() - t0 < 30
+
+
+def test_evaluate_memory_vs_base_gain():
+    preds, skip, days, frozen, start = _holdout_inputs()
+    r = evaluate(preds, skip, days, frozen, start=start)
+    mvb = r["memory_vs_base"]
+    assert mvb["ll_gain"] == pytest.approx(
+        r["rungs"]["base"]["log_loss"] - r["rungs"]["memory"]["log_loss"]
+    )
+    assert mvb["ci"][0] <= mvb["ll_gain"] <= mvb["ci"][1]
+    assert type(mvb["ll_gain"]) is float

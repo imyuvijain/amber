@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from amber.decide.fake import is_synthetic
 from amber.decide.features import build_features
 from amber.decide.metrics import evaluate
 from amber.decide.model import holdout_start, run_frozen, run_ladder
@@ -38,7 +39,8 @@ def run_pipeline(export_dir: Path, out_dir: Path, tz: str = "UTC") -> dict:
 
     Writes ``decisions.parquet`` (plays plus predictions), ``report.md`` (private,
     names artists) and ``public.md`` (aggregates only) to ``out_dir`` and returns
-    the ``evaluate`` result.
+    the ``evaluate`` result plus ``source``, ``synthetic`` and the loader's
+    ``n_near_duplicates`` and ``n_overlap`` counts.
     """
     _check_tz(tz)
     df = load_plays(Path(export_dir))
@@ -50,6 +52,10 @@ def run_pipeline(export_dir: Path, out_dir: Path, tz: str = "UTC") -> dict:
     days = pd.factorize(local_day)[0]
     start = holdout_start(df["ts"], TRAIN_FRAC)
     result = evaluate(preds, skip, np.asarray(days), frozen, start=start)
+    result["source"] = str(df["source"].iloc[0])
+    result["synthetic"] = is_synthetic(df)
+    result["n_near_duplicates"] = int(df.attrs.get("n_near_duplicates", 0))
+    result["n_overlap"] = int(df.attrs.get("n_overlap", 0))
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

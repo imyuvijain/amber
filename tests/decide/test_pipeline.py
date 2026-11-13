@@ -92,27 +92,43 @@ def test_private_report_lists_artists_and_stays_out_of_public(fakes):
     assert "Fake Artist" not in (run["out"] / "public.md").read_text()
 
 
+def _set(result, memory_ci_lo, base_ci_lo):
+    result = copy.deepcopy(result)
+    _gap(result, "context", "memory")["ci"] = (memory_ci_lo, 0.2)
+    result["memory_vs_base"]["ci"] = (base_ci_lo, 0.3)
+    return result
+
+
 def test_headline_wording(fakes):
     base = fakes["personal"]["result"]
     period = ("2024-01", "2025-12")
-    for lo, word in ((0.01, "beats"), (-0.01, "does not beat"), (0.0, "does not beat")):
-        result = copy.deepcopy(base)
-        _gap(result, "context", "memory")["ci"] = (lo, 0.2)
+    cases = (
+        (0.01, 0.02, "beats"),
+        (-0.01, 0.02, "does not beat"),
+        (0.0, 0.02, "does not beat"),
+        # memory beats context but memory does not beat base: still not a win
+        (0.01, -0.02, "does not beat"),
+        (0.01, 0.0, "does not beat"),
+    )
+    for ctx_lo, base_lo, word in cases:
+        result = _set(base, ctx_lo, base_lo)
         line = headline(result)
         assert line.startswith(f"Remembering you {word} context-only listening habits")
-        assert ("Remembering you beats" in line) == (lo > 0)
+        assert ("Remembering you beats" in line) == (word == "beats")
         assert line in render_public(result, period)
 
 
 def test_headline_template_values(fakes):
     result = fakes["personal"]["result"]
     gap = _gap(result, "context", "memory")
-    verb = "beats" if gap["ci"][0] > 0 else "does not beat"
+    mvb = result["memory_vs_base"]
+    verb = "beats" if gap["ci"][0] > 0 and mvb["ci"][0] > 0 else "does not beat"
     expected = (
         f"Remembering you {verb} context-only listening habits: log-loss gain "
         f"{gap['ll_gain']:.3f} (95% CI {gap['ci'][0]:.3f} to {gap['ci'][1]:.3f}) "
         f"on {result['n_holdout']} held-out plays, base skip rate "
-        f"{result['base_rate_holdout']:.0%}."
+        f"{result['base_rate_holdout']:.0%}; memory versus base-rate-only gain "
+        f"{mvb['ll_gain']:.3f} (95% CI {mvb['ci'][0]:.3f} to {mvb['ci'][1]:.3f})."
     )
     assert headline(result) == expected
 
@@ -122,6 +138,7 @@ def test_nan_renders_as_na(fakes):
     for r in result["rungs"].values():
         r["auc"] = float("nan")
     _gap(result, "context", "memory")["ci"] = (float("nan"), float("nan"))
+    result["memory_vs_base"]["ci"] = (float("nan"), float("nan"))
     text = render_public(result, ("2024-01", "2025-12"))
     assert "n/a" in text and "nan" not in text.lower()
     assert "does not beat" in text
@@ -166,3 +183,46 @@ def test_period_uses_local_months():
     df = pd.DataFrame({"ts": pd.to_datetime(["2024-01-31 23:30", "2024-03-01 00:30"], utc=True)})
     assert period(df) == ("2024-01", "2024-03")
     assert period(df, "Europe/Berlin") == ("2024-02", "2024-03")
+
+
+def test_result_flags_synthetic_and_counts(fakes):
+    result = fakes["personal"]["result"]
+    assert result["synthetic"] is True
+    assert result["source"] == "spotify_extended"
+    assert isinstance(result["n_near_duplicates"], int)
+    assert isinstance(result["n_overlap"], int)
+    assert result["n_overlap"] == 0  # the fake never overlaps itself
+
+
+def test_public_report_names_its_source(fakes):
+    for name in ("public.md", "report.md"):
+        text = (fakes["personal"]["out"] / name).read_text()
+        assert "spotify_extended" in text
+        assert "forward button" in text  # the label rule, in words
+        assert "synthetic" in text.lower()
+
+
+def test_report_shows_duplicate_and_overlap_counts(fakes):
+    result = copy.deepcopy(fakes["personal"]["result"])
+    result["n_near_duplicates"], result["n_overlap"] = 12, 7
+    period = ("2024-01", "2025-12")
+    public = render_public(result, period)
+    assert "12 near-duplicate" in public and "7 plays overlap" in public
+    df = load_export(fakes["personal"]["export"])
+    private = render_private(result, df)
+    assert "12 near-duplicate" in private and "7 plays overlap" in private
+
+
+def test_account_report_names_its_label_rule(tmp_path):
+    export = write_fake_export(tmp_path / "e", "null", n_plays=400, fmt="account")
+    result = run_pipeline(export, tmp_path / "out")
+    text = (tmp_path / "out" / "public.md").read_text()
+    assert result["source"] == "spotify_account"
+    assert "spotify_account" in text and "30 seconds" in text
+
+
+def test_real_looking_data_is_not_flagged_synthetic(tmp_path, realish):
+    fake = write_fake_export(tmp_path / "fake", "null", n_plays=400)
+    result = run_pipeline(realish(fake, tmp_path / "real"), tmp_path / "out")
+    assert result["synthetic"] is False
+    assert "synthetic" not in (tmp_path / "out" / "public.md").read_text().lower()

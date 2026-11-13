@@ -83,3 +83,20 @@ def test_account_format_files_and_fields(tmp_path):
     assert not list(tmp_path.glob("Streaming_History_Audio_*.json"))
     row = json.loads(files[0].read_text())[0]
     assert set(row) == {"endTime", "artistName", "trackName", "msPlayed"}
+
+
+def test_fake_exports_are_detectably_synthetic(tmp_path):
+    from amber.decide.fake import is_synthetic
+    from amber.decide.spotify import load_export
+
+    for fmt in ("extended", "account"):
+        dest = write_fake_export(tmp_path / fmt, "null", n_plays=200, fmt=fmt)
+        assert is_synthetic(load_export(dest))
+
+
+def test_realish_data_is_not_synthetic(tmp_path, realish):
+    from amber.decide.fake import is_synthetic
+    from amber.decide.spotify import load_export
+
+    fake = write_fake_export(tmp_path / "fake", "null", n_plays=200)
+    assert not is_synthetic(load_export(realish(fake, tmp_path / "real")))

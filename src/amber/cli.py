@@ -423,6 +423,7 @@ def decide_ingest(
 ) -> None:
     """Parse the export into <data dir>/decide/decisions.parquet."""
     from amber.decide.pipeline import load_plays
+    from amber.decide.report import counts_line
 
     source = _export_dir(export_dir)
     try:
@@ -436,6 +437,7 @@ def decide_ingest(
         f"{len(df)} plays from {df['ts'].min():%Y-%m-%d} to {df['ts'].max():%Y-%m-%d} "
         f"-> {out_dir / 'decisions.parquet'}"
     )
+    typer.echo(counts_line(df.attrs))
 
 
 @decide_app.command("eval")
@@ -446,12 +448,16 @@ def decide_eval(
     ] = None,
     tz: Annotated[str, typer.Option(help="Your timezone, e.g. Europe/Berlin.")] = "UTC",
     publish: Annotated[
-        bool, typer.Option(help="Also copy the aggregates-only report to docs/results.")
+        bool,
+        typer.Option(
+            help="Also copy the aggregates-only report to docs/results "
+            "(refused for synthetic data)."
+        ),
     ] = False,
 ) -> None:
     """Evaluate the decision ladder; write private reports to <data dir>/decide."""
     from amber.decide.pipeline import run_pipeline
-    from amber.decide.report import headline
+    from amber.decide.report import counts_line, headline
 
     out_dir = config.DATA_DIR / "decide"
     try:
@@ -459,8 +465,14 @@ def decide_eval(
     except ValueError as err:
         raise _fail(str(err)) from err
     typer.echo(headline(result))
+    typer.echo(counts_line(result))
     typer.echo(f"wrote {out_dir / 'report.md'} (private) and {out_dir / 'public.md'}")
     if publish:
+        if result["synthetic"]:
+            raise _fail(
+                "refusing to --publish: this run used synthetic (fake) data. "
+                "Evaluate a real export to publish."
+            )
         PUBLIC_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         PUBLIC_RESULTS_PATH.write_text(
             (out_dir / "public.md").read_text(encoding="utf-8"), encoding="utf-8"
