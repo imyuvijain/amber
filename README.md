@@ -8,7 +8,8 @@ The goal is a model that makes the same decisions you would. Platforms each see 
 
 - **v0 (Amber): closed, negative result.** See below.
 - **v1: Spotify skips, built and tested on fake data.** The real run is pending the owner's export. There is no real-person result yet.
-- **Next:** friends' exports, YouTube Takeout (v2), then a "veto, not quiz" screen once predictions are good enough to act on.
+- **v2 sources: Google Takeout and Instagram, ingested from the owner's real exports** (about 69,000 events since 2020), with a life timeline for context and two visual explorations. Exploratory signal is strong (below); the frozen prediction tasks are next.
+- **Next:** freeze and score the first v2 tasks (Instagram creator return, YouTube channel return), the Spotify real run, friends' exports, then a "veto, not quiz" screen once predictions are good enough to act on.
 
 ## v0 (Amber): a quiz that lost
 
@@ -85,9 +86,9 @@ The loader also drops near-duplicate plays (the same track again within 60 s of 
 - Committed reports carry no track, artist or album names and no IDs.
 - No LLM, no paid API, no Spotify Web API, and no downloads beyond your own export.
 
-## Sources v2 (ready, waiting on data)
+## v2: Google, YouTube and Instagram
 
-Loaders for the owner's Google Takeout and Instagram exports are built and tested on fake data only. No models or tasks yet: those get chosen after the real coverage is known (candidate tasks are pre-registered in [the design](docs/superpowers/specs/2026-11-13-sources-v2-design.md)).
+v1 needs one platform. Real decisions are spread across many, so v2 reads more exports into one event log, adds the person's life context, and looks for decisions worth predicting.
 
 ```bash
 uv run amber decide fake-sources data/exports/fake      # made-up google/ and instagram/ folders (--fmt json for JSON)
@@ -95,14 +96,46 @@ uv run amber decide sources data/exports/fake           # audit
 uv run amber decide sources                             # the real thing: reads data/exports/
 ```
 
-- **Where to put the files:** Google Takeout in `data/exports/google/`, Instagram (Meta) in `data/exports/meta/` (or `instagram/`). Google files are found by name (`MyActivity`, `watch-history`, `search-history`; HTML, the Takeout default, or JSON), Instagram by file name, so folder names don't matter.
-- **Output:** one event log (`ts`, `source`, `kind`, `item_id`, `creator_id`, `text`, `url`, `from_ads`) in `data/decide/events.parquet`. The command prints counts, date ranges and active months per source and kind, and never a title, query, URL or username.
-- **Allow-listed paths only:** Search, YouTube, Discover, Maps, Shopping and a few other My Activity products; a fixed list of Instagram activity files. Gemini, messages, media and contacts are never opened.
-- **HTML dates** end in a timezone abbreviation and are read literally as fixed UTC offsets (EST −5, EDT −4, CST −6, CDT −5, MST −7, MDT −6, PST −8, PDT −7, UTC/GMT 0, IST +5:30 India, JST +9, CET +1, CEST +2, BST +1). Takeout prints one label all year ("EST" even in July), so reading it as New York time would shift summer rows by an hour. An unlisted abbreviation counts as a bad row.
+### Loaders
+
+- **Where to put the files:** Google Takeout in `data/exports/google/`, Instagram (Meta) in `data/exports/meta/` (or `instagram/`). Files are found by name, so folder names don't matter. Google: `MyActivity`, `watch-history`, `search-history`, in HTML (the Takeout default) or JSON. Instagram: three layouts, including the 2026 `label_values` one with nested Owner and Media sections.
+- **Output:** one event log (`ts`, `source`, `kind`, `item_id`, `creator_id`, `text`, `url`, `from_ads`) in `data/decide/events.parquet`. The audit prints counts, date ranges and active months per source and kind, never a title, query, URL or username.
+- **Kinds:** Google `search`, `visit`, `discover`, `activity`; YouTube `watch`, `like`; Instagram `like`, `like_comment`, `save`, `comment`, `story_interaction`, `follow`, `ig_search`, `link_open`, `view_post`, `view_video`, `view_story`, `ad_view`, `ad_click`, and explicit feedback: `see_more`, `not_interested`, `not_interested_profile`.
+- **Allow-listed paths only:** Search, YouTube, Discover, Maps, Shopping and a few other My Activity products; a fixed list of Instagram activity files. Gemini and Meta AI chats, messages, media and contacts are never opened.
+- **HTML dates** end in a timezone abbreviation and are read literally as fixed UTC offsets (EST −5, EDT −4, CST −6, CDT −5, MST −7, MDT −6, PST −8, PDT −7, UTC/GMT 0, IST +5:30 India, JST +9, CET +1, CEST +2, BST +1). Takeout prints one label all year ("EST" even in July), so reading it as New York time would shift summer rows by an hour.
+
+### Life context (`amber.decide.life`)
+
+Behavior depends on where you are and what season of life you're in. A small private YAML file (`data/profile/life.yaml`, git-ignored) lists homes with move dates, life phases, exam windows and birth year. `annotate(events, timeline)` adds to every event:
+
+- `country` and `tz`: home by date, overridden on days a country-specific Google Maps domain (`google.co.jp`, `google.co.in`, ...) shows you abroad, with gaps of up to 7 days between two sightings of the same country filled. `google.com` is not evidence of location.
+- `local_hour`, `local_weekday`, `local_date`: in the time zone you were actually in.
+- `age`, `phase`, `in_exam`, `days_to_exam` (capped at 60).
+
+These are candidate features for the v2 ladder, alongside recency weighting so that what you did years ago counts less than what you do now. Like every rung, they must earn their place with a CI above zero.
+
+### Visuals
+
+Two local explorations, built from the event log (scripts not yet in the package):
+
+- **Activity page:** a day-by-day barcode with a location ribbon, a 24-hour clock in true local time, weekday-by-hour heatmaps, binge sessions, channel and creator concentration, monthly volume, exam-season and late-night comparisons, and the categories Meta uses to target ads. Counts and rates only.
+- **Taste map:** every video title, search and caption embedded with the same CLIP text model as v0 (no new download), clustered (k-means, k = 36) and laid out with t-SNE, with labels from each cluster's most distinctive words and a monthly path showing how attention moves. It shows real titles, so it stays on the owner's machine.
+
+### First look: decisions in the owner's data (exploratory)
+
+Before any model, a single count from strictly earlier activity (how often you had already liked that creator or watched that channel) already ranks the next decision well. AUC is scored on all the data at once, not the frozen held-out protocol, so treat these as reasons to build the tasks, not results:
+
+| Decision | Base rate | Decisions | AUC of one prior count |
+|---|---|---|---|
+| Like the same Instagram creator again within 7 days | 24% | 9,736 | 0.90 |
+| Watch the same YouTube channel again within 7 days | 34% | 14,386 | 0.82 |
+| Explicit Reels feedback: "see more" vs "not interested" | 89% see more | 1,904 | 0.73 |
+
+Instagram only exports about a month of posts, videos and stories *viewed*, too short for a "liked it, given it was seen" task, so those three come first. Searches followed by a click within two minutes (29% of searches) are a fourth candidate.
 
 ## Caveats
 
-- **n = 1.** The first real result will be one person. Friends' exports come next, comparing your own profile, someone else's profile and a pooled one.
+- **n = 1.** Every real result so far is one person. Friends' exports come next, comparing your own profile, someone else's profile and a pooled one.
 - **Skip is not dislike.** People skip because they are busy, in the wrong mood, or have heard it too often. v1 predicts the behavior, not the opinion.
 - **Beating the base rate is the bar.** A skip rate of 30% means "never skip" is already 70% accurate, which is why every metric is shown next to it.
 - Amber v0's own reporting had known problems (retest "ceiling" is really retest agreement, bootstrap CIs degenerate at tiny n); see [first-run.md](docs/results/first-run.md).
@@ -116,8 +149,8 @@ uv run ruff check .
 
 ## Credits
 
-- **Vector space (v0):** [open_clip](https://github.com/mlfoundations/open_clip), ViT-B-32 laion2b.
+- **Vector space (v0, and the v2 taste map):** [open_clip](https://github.com/mlfoundations/open_clip), ViT-B-32 laion2b.
 - **Clothes (v0):** Hugging Face dataset `benitomartin/fashion-product-images-small-384x512`, streamed and stored as small thumbnails. Its license is unstated on Hugging Face; it originates from Kaggle's *Fashion Product Images*.
 - **Art (v0):** 2,000 public-domain (CC0) works from the [Art Institute of Chicago API](https://api.artic.edu/docs/).
 - **Research behind v0:** Vessel et al. 2018 (taste in art is individual), the XPASS-Vis preprint (cross-domain transfer), Palmer and Griscom (harmony), Chamorro-Premuzic et al. (openness and art taste). Links are in [NOTES.md](NOTES.md).
-- **Stack:** Python 3.12 with uv, PyTorch, numpy, pandas, pyarrow, scipy, Typer, FastAPI, SQLite, pytest, ruff.
+- **Stack:** Python 3.12 with uv, PyTorch, numpy, pandas, pyarrow, scipy, PyYAML, Typer, FastAPI, SQLite, pytest, ruff.
