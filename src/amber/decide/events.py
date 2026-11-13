@@ -18,7 +18,12 @@ EVENT_COLUMNS: list[str] = [
     "from_ads",
 ]
 DEDUP_KEY: list[str] = ["ts", "source", "kind", "item_id"]
-COUNT_KEYS: tuple[str, ...] = ("n_files", "n_skipped_files", "n_bad_rows", "n_skipped_rows")
+COUNT_KEYS: tuple[str, ...] = (
+    "n_files",
+    "n_skipped_files",
+    "n_bad_rows",
+    "n_skipped_rows",
+)
 
 
 def events_frame(rows: list[dict], stats: dict) -> pd.DataFrame:

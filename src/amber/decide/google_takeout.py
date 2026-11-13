@@ -100,7 +100,11 @@ def _classify(row: dict, product: str) -> tuple[str, str, str | None]:
         if _is_google_host(host) and parsed.path == "/search" and _first(params, "q"):
             return "google", "search", _first(params, "q")
         if product.casefold() == "search":
-            target = _first(params, "q") if _is_google_host(host) and parsed.path == "/url" else None
+            target = (
+                _first(params, "q")
+                if _is_google_host(host) and parsed.path == "/url"
+                else None
+            )
             return "google", "visit", target or url
     elif liked:
         return "youtube", "like", None
@@ -124,7 +128,9 @@ def _product(row: dict, default: str | None) -> str | None:
 
 def _creator(row: dict) -> str | None:
     subtitles = row.get("subtitles")
-    if not (isinstance(subtitles, list) and subtitles and isinstance(subtitles[0], dict)):
+    if not (
+        isinstance(subtitles, list) and subtitles and isinstance(subtitles[0], dict)
+    ):
         return None
     first = subtitles[0]
     for key in ("url", "name"):
@@ -159,7 +165,9 @@ def _read_entries(f: Path) -> list | None:
         text = f.read_text(encoding="utf-8")
         if f.suffix.casefold() == ".html":
             entries = parse_activity_html(text)
-            return entries or None  # a page with no entries is not a Takeout activity page
+            return (
+                entries or None
+            )  # a page with no entries is not a Takeout activity page
         data = json.loads(text)
     except (OSError, ValueError) as e:  # includes UnicodeDecodeError
         log.warning("skipping unreadable Google file %s: %s", f, e)

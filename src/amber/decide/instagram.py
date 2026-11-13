@@ -104,7 +104,9 @@ def _map_value(record: dict, *keys: str):
 
 
 def _timestamp(record: dict) -> pd.Timestamp | None:
-    candidates = [x.get("timestamp") for x in _items(record)] + [record.get("timestamp")]
+    candidates = [x.get("timestamp") for x in _items(record)] + [
+        record.get("timestamp")
+    ]
     for t in candidates:
         if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0:
             return pd.Timestamp(int(t), unit="s", tz="UTC")

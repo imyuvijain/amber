@@ -42,11 +42,17 @@ _ZONES = {abbr: ZoneInfo(name) for abbr, name in TZ_ABBREVIATIONS.items()}
 
 _OUTER = re.compile(r'<div class="outer-cell[^"]*">')
 _HEADER = re.compile(r'class="header-cell[^"]*">(.*?)</div>', re.DOTALL)
-_CONTENT = re.compile(r'class="content-cell[^"]*mdl-typography--body-1">(.*?)</div>', re.DOTALL)
-_CAPTION = re.compile(r'class="content-cell[^"]*mdl-typography--caption">(.*?)</div>', re.DOTALL)
+_CONTENT = re.compile(
+    r'class="content-cell[^"]*mdl-typography--body-1">(.*?)</div>', re.DOTALL
+)
+_CAPTION = re.compile(
+    r'class="content-cell[^"]*mdl-typography--caption">(.*?)</div>', re.DOTALL
+)
 _BR = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _TAG = re.compile(r"<[^>]+>")
-_LINK = re.compile(r'<a\s[^>]*?href="([^"]*)"[^>]*>(.*?)</a>', re.DOTALL | re.IGNORECASE)
+_LINK = re.compile(
+    r'<a\s[^>]*?href="([^"]*)"[^>]*>(.*?)</a>', re.DOTALL | re.IGNORECASE
+)
 _STAMP = re.compile(r"^(?P<dt>.+?[AP]M)\s+(?P<tz>[A-Za-z]+)$")
 _STAMP_FORMAT = "%b %d, %Y, %I:%M:%S %p"
 
@@ -76,7 +82,9 @@ def _details(caption: str) -> list[dict]:
     if "Details:" not in caption:
         return []
     section = caption.split("Details:", 1)[1].split("<b>", 1)[0]
-    return [{"name": t} for t in map(_text, _BR.split(section.replace("</b>", "", 1))) if t]
+    return [
+        {"name": t} for t in map(_text, _BR.split(section.replace("</b>", "", 1))) if t
+    ]
 
 
 def _entry(chunk: str) -> dict:
