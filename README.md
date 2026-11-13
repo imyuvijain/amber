@@ -2,7 +2,7 @@
 
 A personal decision engine, trained on your own data exports.
 
-The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. A model you own can eventually see more than any single platform does. Nothing is asked of you except the files you already have the right to download.
+The goal is a model that makes the same decisions you would. Platforms each see one slice of you, but you can legally download every slice. The goal: a model you own that eventually sees more than any single platform does. Nothing is asked of you except the files you already have the right to download.
 
 ## Status
 
@@ -38,16 +38,18 @@ Label rule (frozen with git tag `decide-v1` before any real data): extended form
 
 ### Results so far: fake users only
 
-These are synthetic sanity checks, not a result about any real person. 5,000 fake plays, about 972 held out. Holdout log loss, lower is better:
+These are synthetic sanity checks, not a result about any real person. 5,000 fake plays, about 972 held out. Holdout log loss, lower is better (reproduce with `amber decide fake <folder> --kind personal --n-plays 5000`, or `--kind null`):
 
 | User | base | context | memory | recency |
 |---|---|---|---|---|
-| personal (planted skip structure) | 0.670 | 0.650 | 0.562 | 0.527 |
+| personal (planted skip structure) | 0.670 | 0.650 | 0.562 | 0.526 |
 | null (skips are random) | 0.602 | 0.602 | 0.601 | 0.602 |
+
+Holdout accuracy: the personal user goes from 60.9% (base rate) to 73.9% (recency); every rung on the null user is 71.1%, the base rate.
 
 On the personal user, memory beats context by 0.088 log loss (95% CI 0.067 to 0.109). On the null user every gap's CI contains 0, as it should.
 
-**Two leaks the null user caught during the build, both fixed before the freeze.** Spotify's `ts` is the play's end time, so a "gap since last play" feature secretly encoded the play's own duration; the null user, who has no signal, scored AUC 0.957. Fix: decisions are timestamped at play start (`ts` minus `ms_played`). Then `ms_played` turned out to exclude pauses, so the current play's gap is replaced by the gap before the previous play. A null control that fails loudly is the best evidence the evaluation is real. The real run is pending.
+**Two leaks the null user caught during the build, both fixed before the freeze.** Spotify's `ts` is the play's end time, so a "gap since last play" feature secretly encoded the play's own duration; the null user, who has no signal, scored AUC 0.957 before the fix in commit 9f84dfe ("decisions happen at play start"). Fix: decisions are timestamped at play start (`ts` minus `ms_played`). Then `ms_played` turned out to exclude pauses, so the current play's gap is replaced by the gap before the previous play. A null control that fails loudly is useful evidence the evaluation catches leaks. The real run is pending.
 
 ### Run it
 
@@ -55,12 +57,17 @@ Needs [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
-uv run amber decide fake data/exports/spotify --kind personal   # or --kind null, --fmt account, --n-plays N
-uv run amber decide ingest                                      # parse the export into data/decide/decisions.parquet
+# try it on a fake export (kept out of the real export folder)
+uv run amber decide fake data/exports/fake --kind personal --n-plays 5000   # or --kind null, --fmt account
+uv run amber decide ingest data/exports/fake
+uv run amber decide eval data/exports/fake
+
+# the real thing, from data/exports/spotify/ (see below)
+uv run amber decide ingest
 uv run amber decide eval --tz Asia/Kolkata                      # your timezone; add --publish for the aggregates-only report
 ```
 
-`eval` writes the full private report to `data/decide/`. With `--publish` it also copies an aggregates-only report to `docs/results/`.
+`ingest` and `eval` write to `data/decide/`, so a fake run and a real run overwrite the same private files. `eval` writes the full private report there. With `--publish` it also copies an aggregates-only report to `docs/results/`; don't publish a fake run.
 
 ### What export to request
 
