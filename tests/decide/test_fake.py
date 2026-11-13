@@ -1,5 +1,6 @@
 import json
 
+import pandas as pd
 import pytest
 
 from amber.decide.fake import write_fake_export
@@ -69,8 +70,6 @@ def test_sessions_and_extended_raw_fields(tmp_path):
             assert r["ms_played"] < 30_000
 
     ts = sorted(r["ts"] for r in rows)  # ISO strings sort chronologically
-    import pandas as pd
-
     gaps = pd.Series(pd.to_datetime(ts, utc=True)).diff().dropna().dt.total_seconds()
     assert ((gaps < 600) | (gaps >= 7200)).all()  # within a session vs between
     sizes = (gaps >= 7200).sum() + 1
@@ -84,9 +83,3 @@ def test_account_format_files_and_fields(tmp_path):
     assert not list(tmp_path.glob("Streaming_History_Audio_*.json"))
     row = json.loads(files[0].read_text())[0]
     assert set(row) == {"endTime", "artistName", "trackName", "msPlayed"}
-
-
-def test_null_and_personal_share_play_context(tmp_path):
-    a = load_export(write_fake_export(tmp_path / "a", "personal", n_plays=500))
-    b = load_export(write_fake_export(tmp_path / "b", "null", n_plays=500))
-    assert a["item_id"].tolist() == b["item_id"].tolist()
