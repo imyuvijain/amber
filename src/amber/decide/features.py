@@ -13,6 +13,7 @@ import pandas as pd
 SESSION_GAP_S = 30 * 60
 GAP_CAP_MIN = 1440
 NEVER_PLAYED_DAYS = 365
+UNKNOWN = "<unknown>"  # stable key for missing artist or track ids
 ARTIST_K = 5.0
 TRACK_K = 3.0
 REASONS = ["clickrow", "trackdone", "fwdbtn", "playbtn"]
@@ -44,10 +45,10 @@ def _platform(value) -> str:
         return "android"
     if "ios" in p or "iphone" in p:
         return "ios"
-    if any(k in p for k in ("windows", "osx", "os x", "mac", "linux")):
-        return "desktop"
     if "web" in p:
         return "web"
+    if any(k in p for k in ("windows", "osx", "os x", "mac", "linux")):
+        return "desktop"
     return "other"
 
 
@@ -80,14 +81,18 @@ def build_features(
     ``df`` must be sorted by ``ts`` (as ``load_export`` returns it). The result
     has the same index as ``df`` and only finite floats.
     """
+    if not df["ts"].is_monotonic_increasing:
+        raise ValueError("df must be sorted by ts (use load_export's order)")
     n = len(df)
     context = _context(df, tz)
     t = (
         (df["ts"] - pd.Timestamp(0, tz="UTC")) / pd.Timedelta(seconds=1)
     ).to_numpy()  # epoch s
     skip = df["skip"].to_numpy(dtype=bool)
-    artists = df["artist_id"].tolist()
-    tracks = df["item_id"].tolist()
+    artists = (
+        df["artist_id"].astype(object).where(df["artist_id"].notna(), UNKNOWN).tolist()
+    )
+    tracks = df["item_id"].astype(object).where(df["item_id"].notna(), UNKNOWN).tolist()
 
     # per-row outputs of the pass: session (3), memory (6), decay (3)
     out = np.zeros((n, 12))

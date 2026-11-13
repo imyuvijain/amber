@@ -217,3 +217,43 @@ def test_300k_rows_under_30s():
     feats = build_features(df)
     assert time.perf_counter() - start < 30
     assert len(feats) == n
+
+
+def test_unsorted_input_raises(personal):
+    shuffled = personal.sample(frac=1.0, random_state=1)
+    with pytest.raises(ValueError, match="sorted"):
+        build_features(shuffled)
+
+
+@pytest.mark.parametrize(
+    ("platform", "column"),
+    [
+        ("web_player osx 11.3.0;chrome", "platform_web"),
+        ("web_player windows 10;chrome", "platform_web"),
+        ("Android OS 12", "platform_android"),
+        ("iOS 16.1 (iPhone14,2)", "platform_ios"),
+        ("Windows 10 (10.0.19045; x64)", "platform_desktop"),
+    ],
+)
+def test_real_platform_strings(platform, column):
+    df = _rows([("2024-01-01 10:00", "a", "t1", False)])
+    df["platform"] = platform
+    row = build_features(df).loc[0]
+    plat = row[[c for c in CONTEXT_COLS if c.startswith("platform_")]]
+    assert plat.idxmax() == column
+    assert plat.sum() == 1
+
+
+def test_missing_ids_share_history():
+    df = _rows(
+        [
+            ("2024-01-01 10:00", "a", "t1", True),
+            ("2024-01-01 10:01", "a", "t2", False),
+        ]
+    )
+    df["artist_id"] = pd.Series([None, None], dtype=object)
+    df["item_id"] = pd.Series([None, None], dtype=object)
+    feats = build_features(df)
+    assert feats.loc[1, "artist_n_log"] > 0
+    assert feats.loc[1, "track_n_log"] > 0
+    assert np.isfinite(feats.to_numpy(dtype=float)).all()
