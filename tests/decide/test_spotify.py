@@ -307,3 +307,40 @@ def test_audiobook_rows_are_dropped(tmp_path):
     )
     df = load_export(tmp_path)
     assert df["item_id"].tolist() == ["spotify:track:a"]
+
+
+def test_near_duplicate_plays_are_dropped_keeping_the_earlier(tmp_path, caplog):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [
+            ext_row("2024-01-01T12:00:00Z", "spotify:track:a", reason_end="fwdbtn"),
+            ext_row("2024-01-01T12:00:02Z", "spotify:track:a", reason_end="trackdone"),
+            ext_row("2024-01-01T12:00:30Z", "spotify:track:b"),
+            ext_row("2024-01-01T12:05:00Z", "spotify:track:a"),  # a real replay
+        ],
+    )
+    with caplog.at_level("INFO"):
+        df = load_export(tmp_path)
+    assert df["item_id"].tolist() == ["spotify:track:a", "spotify:track:b", "spotify:track:a"]
+    assert df["skip"].iloc[0]  # the earlier copy is the one kept
+    assert df.attrs["n_near_duplicates"] == 1
+    assert "1 near-duplicate" in caplog.text
+
+
+def test_overlapping_play_is_kept_and_counted(tmp_path):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [
+            ext_row("2024-01-01T12:00:00Z", "spotify:track:a", ms_played=60_000),
+            # starts at 11:59:30, 30 s before the previous play ended: overlap
+            ext_row("2024-01-01T12:00:40Z", "spotify:track:b", ms_played=70_000),
+            # starts at 12:00:40, right when the previous one ended: no overlap
+            ext_row("2024-01-01T12:01:40Z", "spotify:track:c", ms_played=60_000),
+            # starts 3 s before the previous ended: inside the 5 s tolerance
+            ext_row("2024-01-01T12:02:37Z", "spotify:track:d", ms_played=60_000),
+        ],
+    )
+    df = load_export(tmp_path)
+    assert len(df) == 4
+    assert df.attrs["n_overlap"] == 1
+    assert df.attrs["n_near_duplicates"] == 0

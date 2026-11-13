@@ -30,6 +30,8 @@ DECISION_COLUMNS: list[str] = [
 ]
 
 ACCOUNT_SKIP_MS = 30_000  # account format: a play shorter than this is a skip
+NEAR_DUPLICATE_S = 60  # the same item this soon after its own play is a re-logged copy
+OVERLAP_TOLERANCE_S = 5  # a play starting earlier than the previous end by more is an overlap
 EXTENDED_PATTERNS = ["Streaming_History_Audio_*.json", "endsong_*.json"]
 ACCOUNT_PATTERNS = ["StreamingHistory_music_*.json", "StreamingHistory[0-9]*.json"]
 
@@ -165,7 +167,10 @@ def load_export(path: Path) -> pd.DataFrame:
 
     Returns exactly ``DECISION_COLUMNS``, sorted by ``ts`` (stable), with a fresh
     index. Podcasts, audiobooks, rows without track metadata, rows with an
-    unparseable timestamp and private-session plays are dropped, as are duplicate ``(ts, item_id)`` rows from overlapping exports.
+    unparseable timestamp and private-session plays are dropped, as are duplicate
+    ``(ts, item_id)`` rows from overlapping exports and near-duplicates (the same item again within 60 s, keeping the earlier).
+    ``df.attrs`` carries the counts ``n_bad_ts``, ``n_near_duplicates`` and
+    ``n_overlap`` (plays that began over 5 s before the previous play ended; kept).
     """
     path = Path(path)
     extended = _find(path, EXTENDED_PATTERNS)
@@ -185,6 +190,24 @@ def load_export(path: Path) -> pd.DataFrame:
 
     df = df[DECISION_COLUMNS].drop_duplicates(["ts", "item_id"], keep="first")
     df = df.sort_values("ts", kind="stable").reset_index(drop=True)
+    since_same_item = df.groupby("item_id")["ts"].diff()
+    near = since_same_item <= pd.Timedelta(seconds=NEAR_DUPLICATE_S)
+    stats["n_near_duplicates"] = int(near.sum())
+    if stats["n_near_duplicates"]:
+        log.info(
+            "dropped %d near-duplicate plays (same item within %d s of its earlier play)",
+            stats["n_near_duplicates"],
+            NEAR_DUPLICATE_S,
+        )
+    df = df[~near].reset_index(drop=True)
+    overlap = df["start_ts"] < df["ts"].shift() - pd.Timedelta(seconds=OVERLAP_TOLERANCE_S)
+    stats["n_overlap"] = int(overlap.sum())
+    if stats["n_overlap"]:
+        log.info(
+            "%d plays started more than %d s before the previous play ended (kept)",
+            stats["n_overlap"],
+            OVERLAP_TOLERANCE_S,
+        )
     df["skip"] = df["skip"].astype(bool)
     df.attrs.update(stats)
     return df
