@@ -178,3 +178,28 @@ def test_unreadable_json_is_skipped_with_warning(tmp_path, caplog):
 def test_empty_folder_raises(tmp_path):
     with pytest.raises(ValueError, match="no Spotify streaming history files"):
         load_export(tmp_path)
+
+
+def test_start_ts_is_ts_minus_ms_played(tmp_path):
+    write(
+        tmp_path / "Streaming_History_Audio_2024.json",
+        [
+            ext_row("2024-01-01T12:00:00Z", "spotify:track:a", ms_played=90_500),
+            ext_row("2024-01-01T12:05:00Z", "spotify:track:b", ms_played=None),
+            ext_row("2024-01-01T12:10:00Z", "spotify:track:c", ms_played="oops"),
+        ],
+    )
+    df = load_export(tmp_path)
+    assert list(df.columns[:2]) == ["ts", "start_ts"]
+    assert df.loc[0, "ts"] - df.loc[0, "start_ts"] == pd.Timedelta(milliseconds=90_500)
+    assert (df.loc[1:, "start_ts"] == df.loc[1:, "ts"]).all()
+    assert df["start_ts"].dtype == df["ts"].dtype
+
+
+def test_start_ts_account_format(tmp_path):
+    write(
+        tmp_path / "StreamingHistory_music_0.json",
+        [acc_row("2024-01-01 12:00", ms=180_000)],
+    )
+    df = load_export(tmp_path)
+    assert df.loc[0, "ts"] - df.loc[0, "start_ts"] == pd.Timedelta(minutes=3)

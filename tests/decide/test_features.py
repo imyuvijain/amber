@@ -17,11 +17,18 @@ ALL_COLS = CONTEXT_COLS + MEMORY_COLS + DECAY_COLS
 
 
 def _rows(specs):
-    """specs: (ts string, artist, item, skip) -> a minimal decision frame."""
+    """specs: (ts string, artist, item, skip[, seconds played]) -> a decision frame.
+
+    ``ts`` is the end time; ``start_ts`` is ``ts`` minus the seconds played
+    (default 0, so a play starts and ends at ``ts``).
+    """
     n = len(specs)
+    ts = pd.to_datetime([s[0] for s in specs], utc=True)
+    played = pd.to_timedelta([s[4] if len(s) > 4 else 0 for s in specs], unit="s")
     return pd.DataFrame(
         {
-            "ts": pd.to_datetime([s[0] for s in specs], utc=True),
+            "ts": ts,
+            "start_ts": ts - played,
             "source": "spotify_extended",
             "item_id": [s[2] for s in specs],
             "artist_id": [s[1] for s in specs],
@@ -127,6 +134,60 @@ def test_gap_capped_at_one_day():
     assert build_features(df).loc[1, "gap_min_log"] == pytest.approx(np.log1p(1440))
 
 
+def test_gap_excludes_own_duration():
+    """ts is the end time: a long play must not look different from a short one."""
+    short = _rows(
+        [
+            ("2024-01-01 10:00", "a", "t1", False),
+            ("2024-01-01 10:10", "a", "t2", True, 5),  # started 10:09:55
+        ]
+    )
+    long = _rows(
+        [
+            ("2024-01-01 10:00", "a", "t1", False),
+            ("2024-01-01 10:10", "a", "t2", False, 5),
+        ]
+    )
+    long.loc[1, "ts"] = pd.Timestamp("2024-01-01 10:13", tz="UTC")
+    long.loc[1, "start_ts"] = short.loc[1, "start_ts"]  # same start, longer play
+    a, b = build_features(short), build_features(long)
+    assert a.loc[1, "gap_min_log"] == b.loc[1, "gap_min_log"]
+    assert a.loc[1, "gap_min_log"] == pytest.approx(np.log1p(9 + 55 / 60))
+    pd.testing.assert_series_equal(a.loc[1], b.loc[1])
+
+
+def test_hour_and_session_use_start_time():
+    df = _rows(
+        [
+            ("2024-01-01 10:00:00", "a", "t1", False),
+            ("2024-01-01 11:00:10", "a", "t2", True, 20 * 60),  # started 10:40:10
+        ]
+    )
+    f = build_features(df)
+    assert f.loc[1, "gap_min_log"] == pytest.approx(np.log1p(40 + 10 / 60))
+    assert f.loc[1, "session_pos_log"] == 0  # 40 min from the last end: new session
+    hour = np.arctan2(f.loc[1, "hour_sin"], f.loc[1, "hour_cos"]) * 24 / (2 * np.pi)
+    assert hour == pytest.approx(10 + 40 / 60)  # minute resolution
+
+
+def test_overlapping_play_has_zero_gap():
+    df = _rows(
+        [
+            ("2024-01-01 10:00", "a", "t1", False),
+            ("2024-01-01 10:01", "a", "t2", True, 300),  # started before t1 ended
+        ]
+    )
+    f = build_features(df)
+    assert f.loc[1, "gap_min_log"] == 0
+    assert f.loc[1, "artist_days_log"] == 0
+    assert np.isfinite(f.to_numpy(dtype=float)).all()
+
+
+def test_missing_start_ts_is_an_error(personal):
+    with pytest.raises(ValueError, match="start_ts"):
+        build_features(personal.drop(columns="start_ts"))
+
+
 def test_memory_smoothing_and_decay():
     df = _rows(
         [
@@ -202,6 +263,7 @@ def test_300k_rows_under_30s():
     df = pd.DataFrame(
         {
             "ts": ts,
+            "start_ts": ts,
             "source": "spotify_extended",
             "item_id": rng.integers(0, 20_000, n).astype(str),
             "artist_id": rng.integers(0, 2_000, n).astype(str),

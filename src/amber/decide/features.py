@@ -3,6 +3,12 @@
 One pass in time order, grouped by ``ts``. For each group the features of every
 row are computed first, and only then are the group's labels added to the state,
 so plays that share a timestamp never see each other's labels.
+
+``ts`` is when a play ENDED, so the decision (skip or keep) happens at
+``start_ts = ts - ms_played``. Every time-of-decision quantity (hour, weekday,
+gap since the previous play, session reset, recency) uses ``start_ts``, and is
+measured from the earlier play's ``ts``. Using ``ts`` itself would leak the
+play's own duration, which is what defines a skip.
 """
 
 import math
@@ -54,7 +60,7 @@ def _platform(value) -> str:
 
 def _context(df: pd.DataFrame, tz: str) -> pd.DataFrame:
     """The columns that depend only on the row itself (no history)."""
-    local = df["ts"].dt.tz_convert(tz)
+    local = df["start_ts"].dt.tz_convert(tz)
     hour = local.dt.hour + local.dt.minute / 60
     out = pd.DataFrame(index=df.index)
     out["hour_sin"] = np.sin(2 * np.pi * hour / 24)
@@ -83,11 +89,13 @@ def build_features(
     """
     if not df["ts"].is_monotonic_increasing:
         raise ValueError("df must be sorted by ts (use load_export's order)")
+    if "start_ts" not in df:
+        raise ValueError("df needs a start_ts column (use load_export)")
     n = len(df)
     context = _context(df, tz)
-    t = (
-        (df["ts"] - pd.Timestamp(0, tz="UTC")) / pd.Timedelta(seconds=1)
-    ).to_numpy()  # epoch s
+    epoch = pd.Timestamp(0, tz="UTC")
+    t = ((df["ts"] - epoch) / pd.Timedelta(seconds=1)).to_numpy()  # end, epoch s
+    t_start = ((df["start_ts"] - epoch) / pd.Timedelta(seconds=1)).to_numpy()
     skip = df["skip"].to_numpy(dtype=bool)
     artists = (
         df["artist_id"].astype(object).where(df["artist_id"].notna(), UNKNOWN).tolist()
@@ -113,6 +121,7 @@ def build_features(
             prior = g
             return 0.0, prior, log1p(NEVER_PLAYED_DAYS), prior, 0.0
         count, skips, seen_t, dn, ds = s
+        now = max(now, seen_t)  # a play that started before the last one ended
         f = exp(-decay_rate * (now - seen_t))
         smooth = (skips + k * g) / (count + k)
         dsmooth = (ds * f + k * g) / (dn * f + k)
@@ -125,19 +134,30 @@ def build_features(
         while stop < n and t[stop] == now:
             stop += 1
 
-        if last_t is None or now - last_t > SESSION_GAP_S:
+        # seconds from the previous group's end to each play's start
+        gaps = [
+            None if last_t is None else max(t_start[i] - last_t, 0.0)
+            for i in range(start, stop)
+        ]
+        if last_t is None or min(gaps) > SESSION_GAP_S:  # no row continues the session
             in_session, prev_skip = 0, 0.0
-        gap_min = (
-            GAP_CAP_MIN if last_t is None else min((now - last_t) / 60, GAP_CAP_MIN)
-        )
-        session = (log1p(in_session), log1p(gap_min), prev_skip)
         g = (skips_seen + 1) / (n_seen + 2)
 
         for i in range(start, stop):
-            a_n, a_s, a_days, a_ds, a_dn = read(
-                artist_state, artists[i], now, ARTIST_K, g
+            gap = gaps[i - start]
+            fresh = gap is None or gap > SESSION_GAP_S  # this row starts a session
+            gap_min = GAP_CAP_MIN if gap is None else min(gap / 60, GAP_CAP_MIN)
+            session = (
+                0.0 if fresh else log1p(in_session),
+                log1p(gap_min),
+                0.0 if fresh else prev_skip,
             )
-            t_n, t_s, t_days, t_ds, _ = read(track_state, tracks[i], now, TRACK_K, g)
+            a_n, a_s, a_days, a_ds, a_dn = read(
+                artist_state, artists[i], t_start[i], ARTIST_K, g
+            )
+            t_n, t_s, t_days, t_ds, _ = read(
+                track_state, tracks[i], t_start[i], TRACK_K, g
+            )
             out[i] = (
                 *session,
                 a_n,

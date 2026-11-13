@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 DECISION_COLUMNS: list[str] = [
     "ts",
+    "start_ts",
     "source",
     "item_id",
     "artist_id",
@@ -45,6 +46,15 @@ def _read_rows(files: list[Path]) -> list[dict]:
     return rows
 
 
+def _start_ts(ts: pd.Series, ms_played: pd.Series) -> pd.Series:
+    """``ts`` is when the play ended; the decision happened ``ms_played`` earlier.
+
+    A missing or non-numeric ``ms_played`` leaves ``start_ts == ts``.
+    """
+    ms = pd.to_numeric(ms_played, errors="coerce").fillna(0).clip(lower=0)
+    return ts - pd.to_timedelta(ms, unit="ms")
+
+
 def _extended_frame(rows: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     for col in (
@@ -61,6 +71,7 @@ def _extended_frame(rows: list[dict]) -> pd.DataFrame:
         "skipped",
         "offline",
         "incognito_mode",
+        "ms_played",
     ):
         if col not in df:
             df[col] = None
@@ -72,9 +83,11 @@ def _extended_frame(rows: list[dict]) -> pd.DataFrame:
     )
     df = df[keep]
     skipped = df["skipped"].fillna(False).astype(bool)
+    ts = pd.to_datetime(df["ts"], utc=True)
     return pd.DataFrame(
         {
-            "ts": pd.to_datetime(df["ts"], utc=True),
+            "ts": ts,
+            "start_ts": _start_ts(ts, df["ms_played"]),
             "source": "spotify_extended",
             "item_id": df["spotify_track_uri"],
             "artist_id": df["master_metadata_album_artist_name"],
@@ -95,9 +108,11 @@ def _account_frame(rows: list[dict]) -> pd.DataFrame:
             df[col] = None
     df = df[df["trackName"].notna() & df["endTime"].notna()]
     na = pd.Series(pd.NA, index=df.index, dtype=object)
+    ts = pd.to_datetime(df["endTime"], utc=True)
     return pd.DataFrame(
         {
-            "ts": pd.to_datetime(df["endTime"], utc=True),
+            "ts": ts,
+            "start_ts": _start_ts(ts, df["msPlayed"]),
             "source": "spotify_account",
             "item_id": df["artistName"].astype(str) + "|" + df["trackName"].astype(str),
             "artist_id": df["artistName"],

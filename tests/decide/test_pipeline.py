@@ -41,6 +41,12 @@ def test_null_user_nothing_beats_base(fakes):
         assert ci_contains_zero or gap["ll_gain"] < 0.01, gap
 
 
+def test_null_user_context_has_no_discrimination(fakes):
+    """Guard against duration leaking into context features (AUC ~0.5 expected)."""
+    auc = fakes["null"]["result"]["rungs"]["context"]["auc"]
+    assert auc < 0.6, auc
+
+
 def test_pipeline_writes_outputs_and_uses_the_frozen_holdout(fakes):
     run = fakes["personal"]
     for name in ("decisions.parquet", "report.md", "public.md"):
