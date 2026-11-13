@@ -152,3 +152,17 @@ def test_bad_timezone_is_a_value_error(tmp_path):
     export = write_fake_export(tmp_path / "e", "null", n_plays=200)
     with pytest.raises(ValueError, match="timezone"):
         run_pipeline(export, tmp_path / "out", tz="Mars/Olympus")
+
+
+def test_reports_state_the_pause_limitation(fakes):
+    for name in ("public.md", "report.md"):
+        text = (fakes["personal"]["out"] / name).read_text()
+        assert "ms_played excludes pauses" in text
+
+
+def test_period_uses_local_months():
+    from amber.decide.report import period
+
+    df = pd.DataFrame({"ts": pd.to_datetime(["2024-01-31 20:00", "2024-03-01 00:30"], utc=True)})
+    assert period(df) == ("2024-01", "2024-03")
+    assert period(df, "Asia/Kolkata") == ("2024-02", "2024-03")

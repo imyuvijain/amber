@@ -6,7 +6,7 @@ so plays that share a timestamp never see each other's labels.
 
 ``ts`` is when a play ENDED, so the decision (skip or keep) happens at
 ``start_ts = ts - ms_played``. Every time-of-decision quantity (hour, weekday,
-gap since the previous play, session reset, recency) uses ``start_ts``, and is
+session reset, recency) uses ``start_ts``, and is
 measured from the earlier play's ``ts``. Using ``ts`` itself would leak the
 play's own duration, which is what defines a skip.
 """
@@ -30,7 +30,7 @@ CONTEXT_COLS: list[str] = (
     + [f"platform_{p}" for p in PLATFORMS]
     + ["shuffle", "shuffle_known"]
     + [f"rs_{r}" for r in REASONS]
-    + ["rs_other", "session_pos_log", "gap_min_log", "prev_skip"]
+    + ["rs_other", "session_pos_log", "prev_gap_min_log", "prev_skip"]
 )
 MEMORY_COLS: list[str] = [
     "artist_n_log",
@@ -142,14 +142,19 @@ def build_features(
         if last_t is None or min(gaps) > SESSION_GAP_S:  # no row continues the session
             in_session, prev_skip = 0, 0.0
         g = (skips_seen + 1) / (n_seen + 2)
+        # idle gap before the previous play (known once it started); the gap before
+        # THIS play is not used: it includes this play's own pauses
+        prev_gap = 0.0
+        if start >= 2:
+            idle = max(t_start[start - 1] - t[start - 2], 0.0) / 60
+            prev_gap = log1p(min(idle, GAP_CAP_MIN))
 
         for i in range(start, stop):
             gap = gaps[i - start]
             fresh = gap is None or gap > SESSION_GAP_S  # this row starts a session
-            gap_min = GAP_CAP_MIN if gap is None else min(gap / 60, GAP_CAP_MIN)
             session = (
                 0.0 if fresh else log1p(in_session),
-                log1p(gap_min),
+                prev_gap,
                 0.0 if fresh else prev_skip,
             )
             a_n, a_s, a_days, a_ds, a_dn = read(
@@ -194,7 +199,7 @@ def build_features(
         start = stop
 
     result = context.copy()
-    names = ["session_pos_log", "gap_min_log", "prev_skip"] + MEMORY_COLS + DECAY_COLS
+    names = ["session_pos_log", "prev_gap_min_log", "prev_skip"] + MEMORY_COLS + DECAY_COLS
     for j, name in enumerate(names):
         result[name] = out[:, j]
     return result[CONTEXT_COLS + MEMORY_COLS + DECAY_COLS]

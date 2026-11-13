@@ -122,16 +122,38 @@ def test_session_reset():
     assert feats.loc[2, "prev_skip"] == 1
     assert feats.loc[3, "session_pos_log"] == 0
     assert feats.loc[3, "prev_skip"] == 0
-    assert feats.loc[3, "gap_min_log"] == pytest.approx(np.log1p(31))
+    assert feats.loc[3, "prev_gap_min_log"] == pytest.approx(np.log1p(3))  # t3 after t2
+    assert feats.loc[4, "prev_gap_min_log"] == pytest.approx(np.log1p(31))  # t4 after t3
     assert feats.loc[4, "session_pos_log"] == pytest.approx(np.log1p(1))
     assert feats.loc[4, "prev_skip"] == 1
 
 
-def test_gap_capped_at_one_day():
+def test_prev_gap_capped_and_zero_without_history():
     df = _rows(
-        [("2024-01-01 10:00", "a", "t1", True), ("2024-02-01 10:00", "a", "t2", True)]
+        [
+            ("2024-01-01 10:00", "a", "t1", True),
+            ("2024-02-01 10:00", "a", "t2", True),
+            ("2024-02-01 10:05", "a", "t3", True),
+        ]
     )
-    assert build_features(df).loc[1, "gap_min_log"] == pytest.approx(np.log1p(1440))
+    f = build_features(df)
+    assert f.loc[0, "prev_gap_min_log"] == 0  # no previous play
+    assert f.loc[1, "prev_gap_min_log"] == 0  # previous play has no predecessor
+    assert f.loc[2, "prev_gap_min_log"] == pytest.approx(np.log1p(1440))
+
+
+def test_prev_gap_is_shared_within_a_ts_group():
+    df = _rows(
+        [
+            ("2024-01-01 10:00", "a", "t1", True),
+            ("2024-01-01 10:07", "a", "t2", True),
+            ("2024-01-01 10:10", "a", "t3", True),
+            ("2024-01-01 10:10", "a", "t4", False),
+        ]
+    )
+    f = build_features(df)
+    assert f.loc[2, "prev_gap_min_log"] == f.loc[3, "prev_gap_min_log"]
+    assert f.loc[2, "prev_gap_min_log"] == pytest.approx(np.log1p(7))
 
 
 def test_gap_excludes_own_duration():
@@ -151,9 +173,14 @@ def test_gap_excludes_own_duration():
     long.loc[1, "ts"] = pd.Timestamp("2024-01-01 10:13", tz="UTC")
     long.loc[1, "start_ts"] = short.loc[1, "start_ts"]  # same start, longer play
     a, b = build_features(short), build_features(long)
-    assert a.loc[1, "gap_min_log"] == b.loc[1, "gap_min_log"]
-    assert a.loc[1, "gap_min_log"] == pytest.approx(np.log1p(9 + 55 / 60))
     pd.testing.assert_series_equal(a.loc[1], b.loc[1])
+    # a third play sees the second one's start, never its end
+    for df in (short, long):
+        df.loc[2] = df.loc[1]
+        df.loc[2, ["ts", "start_ts"]] = pd.Timestamp("2024-01-01 11:00", tz="UTC")
+    a, b = build_features(short), build_features(long)
+    assert a.loc[2, "prev_gap_min_log"] == b.loc[2, "prev_gap_min_log"]
+    assert a.loc[2, "prev_gap_min_log"] == pytest.approx(np.log1p(9 + 55 / 60))
 
 
 def test_hour_and_session_use_start_time():
@@ -164,7 +191,6 @@ def test_hour_and_session_use_start_time():
         ]
     )
     f = build_features(df)
-    assert f.loc[1, "gap_min_log"] == pytest.approx(np.log1p(40 + 10 / 60))
     assert f.loc[1, "session_pos_log"] == 0  # 40 min from the last end: new session
     hour = np.arctan2(f.loc[1, "hour_sin"], f.loc[1, "hour_cos"]) * 24 / (2 * np.pi)
     assert hour == pytest.approx(10 + 40 / 60)  # minute resolution
@@ -178,7 +204,6 @@ def test_overlapping_play_has_zero_gap():
         ]
     )
     f = build_features(df)
-    assert f.loc[1, "gap_min_log"] == 0
     assert f.loc[1, "artist_days_log"] == 0
     assert np.isfinite(f.to_numpy(dtype=float)).all()
 

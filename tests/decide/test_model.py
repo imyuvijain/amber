@@ -29,7 +29,7 @@ def test_logit_learns_separable():
     rng = np.random.default_rng(1)
     X = rng.normal(size=(2000, 3))
     y = X[:, 0] > 0
-    model = OnlineLogit(3)
+    model = OnlineLogit(3, lr=0.05)  # a fast step: 2000 rows must be enough
     p = np.empty(len(y))
     for i in range(len(y)):
         p[i] = model.predict(X[i])

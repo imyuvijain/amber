@@ -34,7 +34,7 @@ class OnlineLogit:
     folds the row into the running statistics.
     """
 
-    def __init__(self, n_features: int, lr: float = 0.05, l2: float = 1e-4):
+    def __init__(self, n_features: int, lr: float = 0.003, l2: float = 1e-4):
         self.lr = lr
         self.l2 = l2
         self.w = np.zeros(n_features)

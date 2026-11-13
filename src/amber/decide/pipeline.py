@@ -54,8 +54,8 @@ def run_pipeline(export_dir: Path, out_dir: Path, tz: str = "UTC") -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     pd.concat([df, preds], axis=1).to_parquet(out_dir / "decisions.parquet")
-    (out_dir / "report.md").write_text(render_private(result, df), encoding="utf-8")
+    (out_dir / "report.md").write_text(render_private(result, df, tz), encoding="utf-8")
     (out_dir / "public.md").write_text(
-        render_public(result, period(df)), encoding="utf-8"
+        render_public(result, period(df, tz)), encoding="utf-8"
     )
     return result

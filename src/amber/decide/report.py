@@ -11,6 +11,10 @@ import pandas as pd
 
 MIN_ARTIST_PLAYS = 20
 TOP_ARTISTS = 10
+LIMITATIONS = (
+    "Spotify's ms_played excludes pauses, so the session boundary and time of day "
+    "for a play can be shifted by that play's own pause time."
+)
 RUNG_NOTES = {
     "base": "running skip rate, nothing else",
     "context": "hour, weekday, platform, shuffle, how the play started, session position",
@@ -33,9 +37,9 @@ def _gap(result: dict, lower: str, higher: str) -> dict:
     )
 
 
-def period(df: pd.DataFrame) -> tuple[str, str]:
-    """First and last month (YYYY-MM, UTC) of the plays."""
-    ts = df["ts"]
+def period(df: pd.DataFrame, tz: str = "UTC") -> tuple[str, str]:
+    """First and last month (YYYY-MM, in ``tz``) of the plays."""
+    ts = df["ts"].dt.tz_convert(tz)
     return ts.min().strftime("%Y-%m"), ts.max().strftime("%Y-%m")
 
 
@@ -131,6 +135,7 @@ def render_public(result: dict, period: tuple[str, str]) -> str:
             for r in cal.itertuples()
         ],
     )
+    lines += ["", "## Known limitations", "", LIMITATIONS]
     return "\n".join(lines) + "\n"
 
 
@@ -153,12 +158,12 @@ def _artist_rows(df: pd.DataFrame) -> tuple[list[list[str]], list[list[str]]]:
     return rows(skipped), rows(kept)
 
 
-def render_private(result: dict, df: pd.DataFrame) -> str:
+def render_private(result: dict, df: pd.DataFrame, tz: str = "UTC") -> str:
     """The public report plus the most skipped and most kept artists (names!)."""
     skipped, kept = _artist_rows(df)
     header = ["artist", "plays", "skip rate"]
     lines = [
-        render_public(result, period(df)).rstrip("\n"),
+        render_public(result, period(df, tz)).rstrip("\n"),
         "",
         f"## Artists you skip most (at least {MIN_ARTIST_PLAYS} plays)",
         "",
