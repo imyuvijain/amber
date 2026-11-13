@@ -440,6 +440,53 @@ def decide_ingest(
     typer.echo(counts_line(df.attrs))
 
 
+class _SourcesFormat(StrEnum):
+    html = "html"
+    json = "json"
+
+
+@decide_app.command("fake-sources")
+def decide_fake_sources(
+    dest: Annotated[Path, typer.Argument(help="Exports folder to write google/ and instagram/ into.")],
+    fmt: Annotated[_SourcesFormat, typer.Option(help="Google Takeout format.")] = (
+        _SourcesFormat.html
+    ),
+) -> None:
+    """Write fake Google Takeout and Instagram exports (made-up data) for demos and tests."""
+    from amber.decide.fake_sources import write_fake_sources
+
+    out = write_fake_sources(dest, fmt=fmt.value)
+    typer.echo(f"wrote fake Google ({fmt.value}) and Instagram exports to {out}")
+
+
+@decide_app.command("sources")
+def decide_sources(
+    export_dir: Annotated[
+        Path | None,
+        typer.Argument(
+            help="Exports folder holding google/, meta/ and instagram/ (default: <data dir>/exports)."
+        ),
+    ] = None,
+) -> None:
+    """Read Google and Instagram exports into <data dir>/decide/events.parquet and audit them.
+
+    Prints counts and dates only: never a title, query, URL, username or id.
+    """
+    from amber.decide.sources import audit_lines, load_sources
+
+    source = export_dir or config.DATA_DIR / "exports"
+    try:
+        df = load_sources(source)
+    except ValueError as err:
+        raise _fail(str(err)) from err
+    out_dir = config.DATA_DIR / "decide"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out_dir / "events.parquet")
+    for line in audit_lines(df):
+        typer.echo(line)
+    typer.echo(f"-> {out_dir / 'events.parquet'}")
+
+
 @decide_app.command("eval")
 def decide_eval(
     export_dir: Annotated[
