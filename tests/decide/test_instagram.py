@@ -209,3 +209,77 @@ def test_dedup_and_sort(tmp_path):
 def test_empty_folder(tmp_path):
     df = load_instagram(tmp_path)
     assert len(df) == 0 and list(df.columns) == EVENT_COLUMNS
+
+
+# --- 2026 layout: a bare list of {timestamp, label_values, fbid} records ---------
+
+
+def lv_rec(ts, url=None, username=None, owner_url=None, name=None, **labels):
+    """A record in the label_values layout; Owner is a nested dict section."""
+    values = [{"label": k, "value": v} for k, v in labels.items()]
+    if url:
+        values.append({"label": "URL", "value": url, "href": url})
+    owner = [{"label": "URL", "value": owner_url or ""}, {"label": "Name", "value": name or ""}]
+    if username is not None:
+        owner.append({"label": "Username", "value": username})
+    values.append({"dict": [{"dict": owner, "title": ""}], "title": "Owner"})
+    values.append({"dict": [], "title": "Hashtags"})
+    return {"timestamp": ts, "media": [], "label_values": values, "fbid": "1"}
+
+
+def test_label_values_layout_reads_owner_and_url(tmp_path):
+    write(
+        tmp_path / "your_instagram_activity" / "likes" / "liked_posts.json",
+        [lv_rec(T1, url="https://www.instagram.com/reel/R1/", username="creator_a", name="Creator A")],
+    )
+    r = load_instagram(tmp_path).iloc[0]
+    assert r["kind"] == "like"
+    assert r["item_id"] == "https://www.instagram.com/reel/R1/"
+    assert r["creator_id"] == "creator_a"
+
+
+def test_label_values_owner_falls_back_to_url_then_name(tmp_path):
+    write(
+        tmp_path / "likes" / "liked_posts.json",
+        [
+            lv_rec(T1, url="https://i/p/1", owner_url="https://www.instagram.com/b_user"),
+            lv_rec(T2, url="https://i/p/2", name="Only Name"),
+        ],
+    )
+    df = load_instagram(tmp_path)
+    assert df["creator_id"].tolist() == ["https://www.instagram.com/b_user", "Only Name"]
+
+
+def test_label_values_media_url_used_when_no_top_level_url(tmp_path):
+    rec = lv_rec(T1, username="c", Feedback="See more", Surface="Reels")
+    rec["label_values"].append(
+        {"dict": [{"dict": [{"label": "URL", "value": "https://i/reel/M", "href": "https://i/reel/M"}], "title": ""}], "title": "Media"}
+    )
+    write(tmp_path / "ads_and_topics" / "posts_you're_interested_or_not_interested_in.json", [rec])
+    r = load_instagram(tmp_path).iloc[0]
+    assert r["item_id"] == "https://i/reel/M"
+
+
+@pytest.mark.parametrize(
+    "feedback,kind",
+    [("See more", "see_more"), ("Not interested", "not_interested"), ("See less", "not_interested")],
+)
+def test_interested_file_kind_comes_from_feedback(tmp_path, feedback, kind):
+    write(
+        tmp_path / "ads_and_topics" / "posts_you're_interested_or_not_interested_in.json",
+        [lv_rec(T1, url="https://i/r/1", username="c", Feedback=feedback, Surface="Reels")],
+    )
+    assert load_instagram(tmp_path).iloc[0]["kind"] == kind
+
+
+def test_new_stems(tmp_path):
+    write(tmp_path / "a" / "posts_you're_not_interested_in.json", [lv_rec(T1, username="n", Source="Menu", Surface="Reels")])
+    write(tmp_path / "b" / "stories_viewed.json", [lv_rec(T2, url="https://i/s/1", username="s")])
+    write(tmp_path / "c" / "liked_comments.json", {"likes_comment_likes": [list_rec("cuser", "https://i/c/1", T3)]})
+    write(tmp_path / "d" / "profile_searches.json", {"searches_user": [list_rec("someone", "https://i/someone", T3 + 1)]})
+    write(tmp_path / "e" / "profiles_you're_not_interested_in.json", [lv_rec(T3 + 2, username="p")])
+    df = load_instagram(tmp_path)
+    assert df["kind"].tolist() == [
+        "not_interested", "view_story", "like_comment", "ig_search", "not_interested_profile",
+    ]
+    assert df.iloc[0]["creator_id"] == "n"
