@@ -23,6 +23,14 @@ ingest_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(ingest_app, name="ingest")
+decide_app = typer.Typer(
+    help="Decision engine: predict your own Spotify skips from your data export.",
+    no_args_is_help=True,
+)
+app.add_typer(decide_app, name="decide")
+
+# Where `amber decide eval --publish` copies the aggregates-only report.
+PUBLIC_RESULTS_PATH = config.REPO_ROOT / "docs" / "results" / "spotify-v1.md"
 
 
 @app.callback()
@@ -369,3 +377,92 @@ def serve(
             "`amber ingest art` and `amber embed` first."
         ) from err
     uvicorn.run(create_app(context), host=host, port=port)
+
+
+# --- the decision engine ----------------------------------------------------------------
+
+
+class _FakeKind(StrEnum):
+    personal = "personal"
+    null = "null"
+
+
+class _ExportFormat(StrEnum):
+    extended = "extended"
+    account = "account"
+
+
+def _export_dir(export_dir: Path | None) -> Path:
+    return export_dir or config.DATA_DIR / "exports" / "spotify"
+
+
+@decide_app.command("fake")
+def decide_fake(
+    dest: Annotated[Path, typer.Argument(help="Folder to write the fake export into.")],
+    kind: Annotated[
+        _FakeKind, typer.Option(help="personal has real skip structure; null has none.")
+    ] = _FakeKind.personal,
+    fmt: Annotated[_ExportFormat, typer.Option(help="Spotify export format.")] = (
+        _ExportFormat.extended
+    ),
+    n_plays: Annotated[int, typer.Option(min=1, help="Plays to generate.")] = 6000,
+) -> None:
+    """Write a fake Spotify export with planted (or no) skip structure."""
+    from amber.decide.fake import write_fake_export
+
+    out = write_fake_export(dest, kind.value, n_plays=n_plays, fmt=fmt.value)
+    typer.echo(f"wrote a fake {kind.value} {fmt.value} export ({n_plays} plays) to {out}")
+
+
+@decide_app.command("ingest")
+def decide_ingest(
+    export_dir: Annotated[
+        Path | None,
+        typer.Argument(help="Spotify export folder (default: <data dir>/exports/spotify)."),
+    ] = None,
+) -> None:
+    """Parse the export into <data dir>/decide/decisions.parquet."""
+    from amber.decide.pipeline import load_plays
+
+    source = _export_dir(export_dir)
+    try:
+        df = load_plays(source)
+    except ValueError as err:
+        raise _fail(str(err)) from err
+    out_dir = config.DATA_DIR / "decide"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out_dir / "decisions.parquet")
+    typer.echo(
+        f"{len(df)} plays from {df['ts'].min():%Y-%m-%d} to {df['ts'].max():%Y-%m-%d} "
+        f"-> {out_dir / 'decisions.parquet'}"
+    )
+
+
+@decide_app.command("eval")
+def decide_eval(
+    export_dir: Annotated[
+        Path | None,
+        typer.Argument(help="Spotify export folder (default: <data dir>/exports/spotify)."),
+    ] = None,
+    tz: Annotated[str, typer.Option(help="Your timezone, e.g. Asia/Kolkata.")] = "UTC",
+    publish: Annotated[
+        bool, typer.Option(help="Also copy the aggregates-only report to docs/results.")
+    ] = False,
+) -> None:
+    """Evaluate the decision ladder; write private reports to <data dir>/decide."""
+    from amber.decide.pipeline import run_pipeline
+    from amber.decide.report import headline
+
+    out_dir = config.DATA_DIR / "decide"
+    try:
+        result = run_pipeline(_export_dir(export_dir), out_dir, tz=tz)
+    except ValueError as err:
+        raise _fail(str(err)) from err
+    typer.echo(headline(result))
+    typer.echo(f"wrote {out_dir / 'report.md'} (private) and {out_dir / 'public.md'}")
+    if publish:
+        PUBLIC_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PUBLIC_RESULTS_PATH.write_text(
+            (out_dir / "public.md").read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        typer.echo(f"published {PUBLIC_RESULTS_PATH}")
