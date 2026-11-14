@@ -181,7 +181,7 @@ def _keywords(
 
 
 def extract_topics(
-    docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = None
+    docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = None, min_docs: int = MIN_DOCS
 ) -> TopicModel:
     """Cluster ``docs["text"]`` into topics. ``encoder.embed_texts`` returns unit rows."""
     codes, uniq = pd.factorize(docs["text"], sort=True)
@@ -223,7 +223,7 @@ def extract_topics(
     text_topic = np.where(cos >= ASSIGN_COS, lab, -1)
     doc_t = text_topic[codes]
     sizes = np.bincount(doc_t[doc_t >= 0], minlength=n)
-    keep = [g for g in np.argsort(-sizes, kind="stable") if sizes[g] >= MIN_DOCS]
+    keep = [g for g in np.argsort(-sizes, kind="stable") if sizes[g] >= min_docs]
     remap = np.full(n + 1, -1)
     remap[keep] = np.arange(len(keep))
     doc_t = remap[doc_t]
