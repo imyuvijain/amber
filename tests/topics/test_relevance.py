@@ -58,3 +58,12 @@ def test_burst_window_ignores_timestamp_resolution(unit):
 
     ts = pd.Series(pd.date_range("2022-01-01", periods=48, freq="MS", tz="UTC")).astype(f"datetime64[{unit}, UTC]")
     assert _max_window_share(ts, 60) < 0.1  # one event a month: no 60-day window holds 10%
+
+
+def test_drivers_skip_baseline_phrases():
+    """A topic that looks like everything else gets no 'active now' or deliberate phrase."""
+    feats = topic_features(fake_topic_docs("null"))
+    for t in feats.index:
+        d = drivers(feats.loc[t])
+        assert "active now" not in d
+        assert not any("searched or liked" in x or "passive" in x for x in d)
