@@ -188,3 +188,27 @@ export const thumbUrl = (id: string): string => {
 export function prefetchImages(...items: Item[]): void {
   for (const item of items) new Image().src = item.thumb_url
 }
+
+// ---- topics: the veto screen (src/amber/api/topics.py) ----
+
+export type TopicAction = 'veto' | 'boost' | 'clear'
+
+export interface Topic {
+  id: string
+  name: string
+  relevance: number
+  drivers: string[]
+  state: 'veto' | 'boost' | null
+  n_docs: number
+}
+
+export interface TopicList {
+  topics: Topic[]
+  muted: Topic[]
+  n_labels: number
+}
+
+export const getTopics = () => request<TopicList>('GET', '/api/topics')
+
+export const tapTopic = (id: string, action: TopicAction, shown: string[] = []) =>
+  request<TopicList>('POST', `/api/topics/${encodeURIComponent(id)}/feedback`, { action, shown })
