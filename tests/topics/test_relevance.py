@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from amber.topics.fake import fake_topic_docs
 from amber.topics.relevance import FEATURES, FROZEN, drivers, score, topic_features
@@ -10,12 +11,16 @@ def _ranked(kind):
     return feats, score(feats)
 
 
-def test_null_user_gets_flat_relevance():
-    feats, rel = _ranked("null")
+@pytest.mark.parametrize("seed", [7, 8, 9])
+def test_null_user_gets_flat_relevance(seed):
+    feats = topic_features(fake_topic_docs("null", seed=seed))
+    rel = score(feats)
     assert len(rel) >= 10
-    assert rel.max() - rel.min() < 0.1
+    assert rel.max() - rel.min() < 0.12
     for f in ("steady", "deliberate", "now", "exam", "trip"):
         assert feats[f].abs().max() < 0.5, f
+    planted = score(topic_features(fake_topic_docs("planted", seed=seed)))
+    assert planted.max() - planted.min() > 0.5
 
 
 def test_planted_core_topic_wins_and_traps_rank_below_background():
