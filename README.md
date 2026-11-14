@@ -36,15 +36,19 @@ On the user with real habits, accuracy rises from 61% to 74%, and memory beats c
 - Spotify timestamps a play when it ends, so a "time since the last play" feature contained the play's own length (the random user scored AUC 0.957).
 - Spotify's listening time excludes pauses.
 
-**First look at real data** (one person, about 69,000 events from 2020 to 2026). A single count from earlier activity already ranks the next decision well:
+**Real data** (one person's Google and Instagram exports, about 69,000 events from 2020 to 2026). The protocol was frozen as git tag `decide-v2` before the first run. Every decision is predicted from strictly earlier data, and a 7-day label only trains the model once its 7 days are over. Scores are on the last 20% of decisions (June to November 2026):
 
-| Decision | Base rate | AUC |
-|---|---|---|
-| Like the same Instagram creator again within 7 days | 24% | 0.90 |
-| Watch the same YouTube channel again within 7 days | 34% | 0.82 |
-| Reels feedback: "see more" vs "not interested" | 89% | 0.73 |
+| Decision | Held out | Base rate | Context + life AUC | + Memory AUC | Memory's log-loss gain (95% CI) |
+|---|---|---|---|---|---|
+| Watch the same YouTube channel again within 7 days | 2,878 | 31% | 0.54 | **0.85** | +0.19 (+0.16 to +0.22) |
+| Like the same Instagram creator again within 7 days | 1,949 | 29% | 0.57 | **0.94** | +0.37 (+0.31 to +0.44) |
+| Reels feedback: "see more" vs "not interested" | 381 | 97% | 0.72 | 0.76 | no gain over the base rate |
 
-These are exploratory: scored on all the data at once, not yet on the held-out protocol.
+- **Who you engage with is predictable; when and where you are is not.** Time of day, weekends, exam weeks and travel add nothing on the return tasks. A person's own history with a creator does almost all the work.
+- **Reels feedback fails the headline rule.** 97% of recent feedback is "see more", so the base rate is already hard to beat with 381 examples.
+- **The null control passes.** On a synthetic user whose creators are drawn at random, memory gains nothing. A prefix-invariance test checks that no prediction changes when future data is deleted.
+
+Full tables: [docs/results/sources-v2.md](docs/results/sources-v2.md).
 
 **Earlier experiment.** The first version of Amber tried to learn taste through a this-or-that quiz in a CLIP embedding space (art preferences predicting clothing picks). On a real run it scored 52.5%, no better than a coin flip, while a model of the person's own past picks reached 66%. That result is why the project switched from asking people questions to learning from decisions they had already made. Write-up: [docs/results/first-run.md](docs/results/first-run.md).
 
@@ -60,6 +64,7 @@ uv run amber decide eval data/exports/fake
 # your own exports, in data/exports/{spotify,google,meta}/
 uv run amber decide eval --tz America/Toronto    # Spotify skip ladder
 uv run amber decide sources                      # Google + Instagram event log, prints counts only
+uv run amber decide tasks                        # score the v2 decisions (aggregates only)
 ```
 
 `data/` is git-ignored. Raw exports and private reports stay on your machine. Published reports contain aggregates only, and publishing refuses to run on synthetic data.
@@ -77,6 +82,7 @@ src/amber/decide/
   model.py           online logistic regression and the model ladder
   metrics.py         log loss, Brier, AUC, calibration, day-block bootstrap
   pipeline.py        export in, reports out
+  tasks.py           v2 decisions: delayed labels, life rung, held-out scoring
 src/amber/           the earlier quiz app: CLIP space, preference models, FastAPI
 web/                 its React front end
 tests/               736 tests (pytest)
