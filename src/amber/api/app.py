@@ -1,4 +1,5 @@
-"""FastAPI app: users, filters, style words, the quiz, pairs, choosing, results, search, thumbs.
+"""FastAPI app: users, filters, style words, the quiz, pairs, choosing, results, search, thumbs,
+and the topics veto screen (`amber.api.topics`).
 
 One sqlite connection is shared by every request, so every handler that touches it holds
 `lock` (sync handlers run in a threadpool). If `web/dist` exists it is served at `/`.
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from amber.api.topics import topics_router
 from amber.config import REPO_ROOT, SEARCH_CANDIDATES, SEARCH_LAMBDA, SEARCH_RESULTS
 from amber.context import DOMAINS, AppContext
 from amber.data.catalog import thumb_path
@@ -407,6 +409,8 @@ def create_app(ctx: AppContext) -> FastAPI:
         if not path.is_file():
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path, media_type="image/jpeg")
+
+    app.include_router(topics_router(ctx.data_dir))
 
     if WEB_DIST.is_dir():  # mounted last, so it never shadows the routes above
         app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
