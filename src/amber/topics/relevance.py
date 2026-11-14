@@ -78,10 +78,11 @@ def _expected_cover(n: int, probs: np.ndarray) -> float:
 
 
 def _max_window_share(ts: pd.Series, days: int) -> float:
-    t = np.sort(ts.astype("int64").to_numpy())
-    if len(t) == 0:
+    if len(ts) == 0:
         return 0.0
-    j = np.searchsorted(t, t + days * 86_400 * 10**9, side="right")
+    # seconds since the first event: independent of the column's ns/us/ms/s resolution
+    t = np.sort((ts - ts.min()).dt.total_seconds().to_numpy())
+    j = np.searchsorted(t, t + days * 86_400, side="right")
     return float((j - np.arange(len(t))).max() / len(t))
 
 
