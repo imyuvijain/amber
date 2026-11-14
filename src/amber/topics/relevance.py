@@ -57,6 +57,11 @@ CLIPS = {
     "exam": (0.0, 3.0),
     "trip": (0.0, 3.0),
 }
+# Driver phrases fire only when a topic differs from the person's baseline (topics-v1.2:
+# set after the first real run, where every topic read "active now"; the score is untouched).
+DRIVER_NOW = 0.15
+DRIVER_DELIBERATE = 0.25
+DRIVER_PENALTY = 0.25
 FACT_DEFAULTS = {
     "span_years": 0.0, "exam_share": 0.0, "trip_share": 0.0, "burst_share": 0.0,
     "summer_share": 0.0, "deliberate_share": 0.0, "recent_share": 1.0, "last_year": 0,
@@ -184,18 +189,20 @@ def drivers(row: pd.Series, weights: dict | None = None) -> list[str]:
         out.append((abs(c["steady"]), "on and off"))
     if row["exam_share"] >= 0.5:
         out.append((abs(c["exam"]) + 0.2, "mostly during exams"))
-    elif row["exam"] >= 1.0:
+    elif row["exam"] >= DRIVER_PENALTY:
         out.append((abs(c["exam"]), "often during exams"))
     if row["trip_share"] >= 0.5:
         out.append((abs(c["trip"]) + 0.2, "mostly on a trip"))
     if row["recent_share"] < 0.05:
         out.append((abs(c["now"]), f"quiet since {row['last_year']}"))
-    elif row["now"] >= -0.3:
+    elif row["now"] >= DRIVER_NOW:
         out.append((abs(c["now"]) + 0.1, "active now"))
-    if row["deliberate"] >= 0.5:
+    elif row["now"] <= -2 * DRIVER_NOW:
+        out.append((abs(c["now"]), "fading lately"))
+    if row["deliberate"] >= DRIVER_DELIBERATE:
         lead = "mostly" if row["deliberate_share"] >= 0.5 else "often"
         out.append((abs(c["deliberate"]), f"{lead} searched or liked"))
-    elif row["deliberate"] <= -0.5:
+    elif row["deliberate"] <= -DRIVER_DELIBERATE:
         out.append((abs(c["deliberate"]), "mostly passive viewing"))
     present = [s for s in str(row["sources"]).split(",") if s]
     if present:
