@@ -1,4 +1,4 @@
-import { useCallback, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useState, type ComponentType } from 'react'
 import Shell from './components/Shell'
 import type { ScreenProps } from './screens/props'
 import Quiz from './screens/Quiz'
@@ -7,6 +7,7 @@ import Sections from './screens/Sections'
 import Showdown from './screens/Showdown'
 import StyleWords from './screens/StyleWords'
 import ThisOrThat from './screens/ThisOrThat'
+import Topics from './screens/Topics'
 import Welcome from './screens/Welcome'
 import { clearSession, loadStep, loadUserId, saveStep, saveUserId } from './storage'
 import { isStepId, stepAfter } from './steps'
@@ -28,7 +29,26 @@ function initial(): { userId: string | null; step: string } {
   return { userId: null, step: 'welcome' }
 }
 
+// The veto screen (topics) is the front page; the closed v0 quiz flow lives at #v0.
+function useHash(): string {
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const on = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', on)
+    return () => window.removeEventListener('hashchange', on)
+  }, [])
+  return hash
+}
+
 export default function App() {
+  return useHash() === '#v0' ? <V0 /> : (
+    <Shell step="welcome" signedIn={false} onReset={() => {}}>
+      <Topics />
+    </Shell>
+  )
+}
+
+function V0() {
   const [{ userId, step }, setSession] = useState(initial)
 
   const go = useCallback((next: string) => {
