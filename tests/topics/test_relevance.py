@@ -48,3 +48,13 @@ def test_features_and_weights_line_up():
     assert set(FROZEN["weights"]) == set(FEATURES)
     feats, _ = _ranked("planted")
     assert np.isfinite(feats[FEATURES].to_numpy()).all()
+
+
+@pytest.mark.parametrize("unit", ["ns", "us", "ms", "s"])
+def test_burst_window_ignores_timestamp_resolution(unit):
+    import pandas as pd
+
+    from amber.topics.relevance import _max_window_share
+
+    ts = pd.Series(pd.date_range("2022-01-01", periods=48, freq="MS", tz="UTC")).astype(f"datetime64[{unit}, UTC]")
+    assert _max_window_share(ts, 60) < 0.1  # one event a month: no 60-day window holds 10%
