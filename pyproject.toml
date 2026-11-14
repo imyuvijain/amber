@@ -17,6 +17,7 @@ dependencies = [
     "typer",
     "pyyaml",
     "scipy>=1.18.1",
+    "sentence-transformers>=6.3.0",
 ]
 
 [project.scripts]
