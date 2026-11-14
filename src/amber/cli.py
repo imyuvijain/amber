@@ -487,6 +487,58 @@ def decide_sources(
     typer.echo(f"-> {out_dir / 'events.parquet'}")
 
 
+# Where `amber decide tasks --publish` copies the aggregates-only report.
+TASKS_RESULTS_PATH = config.REPO_ROOT / "docs" / "results" / "sources-v2.md"
+
+
+@decide_app.command("tasks")
+def decide_tasks(
+    publish: Annotated[
+        bool,
+        typer.Option(
+            help="Also copy the aggregates-only report to docs/results "
+            "(refused for synthetic data)."
+        ),
+    ] = False,
+) -> None:
+    """Score the frozen v2 decisions (YouTube, Instagram) on <data dir>/decide/events.parquet.
+
+    Uses <data dir>/profile/life.yaml for local time and life context when present.
+    Prints and writes aggregates only.
+    """
+    import json
+
+    import pandas as pd
+
+    from amber.decide.life import load_timeline
+    from amber.decide.tasks import is_synthetic_events, render_tasks_md, run_tasks
+
+    path = config.DATA_DIR / "decide" / "events.parquet"
+    if not path.exists():
+        raise _fail(f"no event log at {path}: run `amber decide sources` first")
+    events = pd.read_parquet(path)
+    life = config.DATA_DIR / "profile" / "life.yaml"
+    tl = load_timeline(life) if life.exists() else None
+    typer.echo("life context: " + ("on" if tl else "off (no profile/life.yaml)"))
+    results = run_tasks(events, tl)
+    md = render_tasks_md(results)
+    out_dir = config.DATA_DIR / "decide" / "tasks"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "public.md").write_text(md, encoding="utf-8")
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+    typer.echo(md)
+    typer.echo(f"wrote {out_dir / 'public.md'} and {out_dir / 'results.json'}")
+    if publish:
+        if is_synthetic_events(events):
+            raise _fail(
+                "refusing to --publish: this event log is synthetic (fake). "
+                "Run on real exports to publish."
+            )
+        TASKS_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        TASKS_RESULTS_PATH.write_text(md, encoding="utf-8")
+        typer.echo(f"published {TASKS_RESULTS_PATH}")
+
+
 @decide_app.command("eval")
 def decide_eval(
     export_dir: Annotated[
