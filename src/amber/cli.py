@@ -28,6 +28,11 @@ decide_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(decide_app, name="decide")
+topics_app = typer.Typer(
+    help="Topics: what your activity is about and how much each topic matters to you.",
+    no_args_is_help=True,
+)
+app.add_typer(topics_app, name="topics")
 
 # Where `amber decide eval --publish` copies the aggregates-only report.
 PUBLIC_RESULTS_PATH = config.REPO_ROOT / "docs" / "results" / "spotify-v1.md"
@@ -577,3 +582,42 @@ def decide_eval(
             (out_dir / "public.md").read_text(encoding="utf-8"), encoding="utf-8"
         )
         typer.echo(f"published {PUBLIC_RESULTS_PATH}")
+
+
+class _TopicEncoder(StrEnum):
+    minilm = "minilm"
+    hash = "hash"
+
+
+@topics_app.command("build")
+def topics_build(
+    encoder: Annotated[
+        _TopicEncoder, typer.Option(help="minilm (local sentence model) or hash (no model).")
+    ] = _TopicEncoder.minilm,
+    min_docs: Annotated[int, typer.Option(min=1, help="Smallest topic kept.")] = 30,
+) -> None:
+    """Cluster <data dir>/decide/events.parquet into topics and score their relevance.
+
+    Writes <data dir>/topics/. Prints counts only: never a title, query or topic name.
+    """
+    import pandas as pd
+
+    from amber.topics.embed import CachedEncoder, HashingEncoder, MiniLMEncoder
+    from amber.topics.pipeline import build_topics
+
+    path = config.DATA_DIR / "decide" / "events.parquet"
+    if not path.exists():
+        raise _fail(f"no event log at {path}: run `amber decide sources` first")
+    out_dir = config.DATA_DIR / "topics"
+    base = MiniLMEncoder() if encoder is _TopicEncoder.minilm else HashingEncoder()
+    enc = CachedEncoder(base, out_dir / "embeddings.npz")
+    try:
+        summary = build_topics(
+            pd.read_parquet(path), enc, out_dir,
+            life_path=config.DATA_DIR / "profile" / "life.yaml", min_docs=min_docs,
+        )
+    except ValueError as err:
+        raise _fail(str(err)) from err
+    for k, v in summary.items():
+        typer.echo(f"{k}: {v}")
+    typer.echo(f"-> {out_dir} (names and texts stay there; open the veto screen to see them)")
