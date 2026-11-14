@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
 import pytest
+from decide.test_cli_sources import PRIVATE
 from typer.testing import CliRunner
 
 from amber import config
 from amber.cli import app
 from amber.topics.embed import CachedEncoder, HashingEncoder
-from decide.test_cli_sources import PRIVATE
 
 
 @pytest.fixture
