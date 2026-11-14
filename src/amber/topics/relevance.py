@@ -57,6 +57,11 @@ CLIPS = {
     "exam": (0.0, 3.0),
     "trip": (0.0, 3.0),
 }
+FACT_DEFAULTS = {
+    "span_years": 0.0, "exam_share": 0.0, "trip_share": 0.0, "burst_share": 0.0,
+    "summer_share": 0.0, "deliberate_share": 0.0, "recent_share": 1.0, "last_year": 0,
+    "sources": "",
+}
 SOURCE_NAMES = {"youtube": "YouTube", "google": "Google", "instagram": "Instagram"}
 
 
@@ -165,6 +170,7 @@ def _sources_phrase(present: list[str]) -> str:
 def drivers(row: pd.Series, weights: dict | None = None) -> list[str]:
     """Short readable reasons for one topic's score, strongest first."""
     w = (weights or FROZEN)["weights"]
+    row = pd.Series({**FACT_DEFAULTS, **row.to_dict()})
     c = {f: float(row[f]) * w[f] for f in FEATURES}
     out: list[tuple[float, str]] = []
     if row["burst_share"] >= 0.6:

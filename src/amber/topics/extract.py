@@ -26,11 +26,89 @@ MIN_DOCS = 30
 N_KEYWORDS = 8
 _TOKEN = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
 STOPWORDS = frozenset(
-    "the and for with you your this that from how what why who are was were have has "
-    "not but all can will just our out new get got one two its it's into about more "
-    "best top full part video official episode ep vs feat ft live day days ki ka ke hai "
-    "aur se to of in on is a an my me we us they them he she his her be do does did "
-    "http https www com".split()
+    [
+        "the",
+        "and",
+        "for",
+        "with",
+        "you",
+        "your",
+        "this",
+        "that",
+        "from",
+        "how",
+        "what",
+        "why",
+        "who",
+        "are",
+        "was",
+        "were",
+        "have",
+        "has",
+        "not",
+        "but",
+        "all",
+        "can",
+        "will",
+        "just",
+        "our",
+        "out",
+        "new",
+        "get",
+        "got",
+        "one",
+        "two",
+        "its",
+        "it's",
+        "into",
+        "about",
+        "more",
+        "best",
+        "top",
+        "full",
+        "part",
+        "video",
+        "official",
+        "episode",
+        "ep",
+        "vs",
+        "feat",
+        "ft",
+        "live",
+        "day",
+        "days",
+        "ki",
+        "ka",
+        "ke",
+        "hai",
+        "aur",
+        "se",
+        "to",
+        "of",
+        "in",
+        "on",
+        "is",
+        "a",
+        "an",
+        "my",
+        "me",
+        "we",
+        "us",
+        "they",
+        "them",
+        "he",
+        "she",
+        "his",
+        "her",
+        "be",
+        "do",
+        "does",
+        "did",
+        "http",
+        "https",
+        "www",
+        "com",
+    ]
 )
 
 
@@ -78,7 +156,9 @@ def _union(n: int, pairs) -> list[int]:
     return [find(i) for i in range(n)]
 
 
-def _keywords(texts: list[str], counts: np.ndarray, lab: np.ndarray, n: int) -> list[list[str]]:
+def _keywords(
+    texts: list[str], counts: np.ndarray, lab: np.ndarray, n: int
+) -> list[list[str]]:
     """c-TF-IDF: a word scores high if it's frequent in this topic and rare elsewhere."""
     tf = [Counter() for _ in range(n)]
     for t, c, g in zip(texts, counts, lab):
@@ -100,7 +180,9 @@ def _keywords(texts: list[str], counts: np.ndarray, lab: np.ndarray, n: int) -> 
     return out
 
 
-def extract_topics(docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = None) -> TopicModel:
+def extract_topics(
+    docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = None
+) -> TopicModel:
     """Cluster ``docs["text"]`` into topics. ``encoder.embed_texts`` returns unit rows."""
     codes, uniq = pd.factorize(docs["text"], sort=True)
     texts = [str(t) for t in uniq]
@@ -113,15 +195,24 @@ def extract_topics(docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = N
 
     # 1. merge near-duplicate centroids
     sim = C @ C.T
-    groups = _union(k, [(a, b) for a in range(k) for b in range(a + 1, k) if sim[a, b] >= MERGE_COS])
+    groups = _union(
+        k, [(a, b) for a in range(k) for b in range(a + 1, k) if sim[a, b] >= MERGE_COS]
+    )
     lab, n = _relabel(lab, groups)
     C = _centroids(X, counts, lab, n)
 
     # 2. name by label; clusters sharing a label merge
     names = [lbl for lbl, _ in labels]
-    L = _unit(np.asarray(encoder.embed_texts(names), dtype=np.float64)) if names else np.zeros((0, X.shape[1]))
+    L = (
+        _unit(np.asarray(encoder.embed_texts(names), dtype=np.float64))
+        if names
+        else np.zeros((0, X.shape[1]))
+    )
     best = (C @ L.T) if len(names) else np.zeros((n, 0))
-    pick = [int(best[i].argmax()) if len(names) and best[i].max() >= NAME_COS else None for i in range(n)]
+    pick = [
+        int(best[i].argmax()) if len(names) and best[i].max() >= NAME_COS else None
+        for i in range(n)
+    ]
     groups = [("label", p) if p is not None else ("own", i) for i, p in enumerate(pick)]
     lab, n = _relabel(lab, groups)
     group_label = list(dict.fromkeys(groups))
@@ -139,7 +230,9 @@ def extract_topics(docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = N
     text_t = remap[text_topic]
 
     ok = text_t >= 0
-    kw = _keywords([t for t, o in zip(texts, ok) if o], counts[ok], text_t[ok], len(keep))
+    kw = _keywords(
+        [t for t, o in zip(texts, ok) if o], counts[ok], text_t[ok], len(keep)
+    )
     rows = []
     for new, g in enumerate(keep):
         kind, p = group_label[g]
@@ -154,5 +247,7 @@ def extract_topics(docs: pd.DataFrame, encoder, labels=LABELS, k: int | None = N
                 "n_docs": int(sizes[g]),
             }
         )
-    topics = pd.DataFrame(rows, columns=["topic_id", "name", "named_by", "utility", "keywords", "n_docs"])
+    topics = pd.DataFrame(
+        rows, columns=["topic_id", "name", "named_by", "utility", "keywords", "n_docs"]
+    )
     return TopicModel(doc_t, topics, C[keep] if keep else np.zeros((0, X.shape[1])))

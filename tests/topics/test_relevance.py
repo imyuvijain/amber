@@ -24,7 +24,7 @@ def test_null_user_gets_flat_relevance(seed):
 
 
 def test_planted_core_topic_wins_and_traps_rank_below_background():
-    feats, rel = _ranked("planted")
+    _feats, rel = _ranked("planted")
     assert rel.idxmax() == "core"
     background = rel[[t for t in rel.index if t.startswith("bg")]]
     for trap in ("exam", "trip", "burst", "old", "gaming"):
